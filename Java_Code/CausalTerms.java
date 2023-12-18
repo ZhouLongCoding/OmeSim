@@ -1,5 +1,10 @@
 package omesim;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.util.ArrayList;
 import java.util.HashMap;
 
 /*
@@ -72,6 +77,25 @@ public class CausalTerms {
 		// extract data from this.main_frame.geno_G, main_frame.trait_Y, and main_frame.exp_Z
 	}
 
+	public static CausalTerms[] load_terms_from_file(String arch_detailed_file) {
+		CausalTerms[] terms=null;
+		try {
+			BufferedReader br = new BufferedReader(new FileReader(arch_detailed_file));
+			ArrayList<CausalTerms> terms_array=new ArrayList<CausalTerms>();
+			String line=br.readLine();
+			while(line.startsWith("#"))line=br.readLine();
+			while(line!=null){
+				terms_array.add(new CausalTerms(line));
+				line=br.readLine();
+			}
+			int num_terms=terms_array.size();
+			terms=new CausalTerms[num_terms];
+			for(int term_index=0;term_index<num_terms;term_index++) {
+				terms[term_index]=terms_array.get(term_index);
+			}
+		}catch(Exception e) {e.printStackTrace();}
+		return terms;
+	}
 	
 	/*
 	 * Based on the pre-specified causal terms, this function will:
@@ -218,9 +242,9 @@ public class CausalTerms {
 	 * 
 	 * Calculate correlation matrices BEFORE adding noise term and infinitesmal term. (the "gold-standard" relationship).
 	 */
-	public void calculate_all_value(MainFrame main_frame, CausalTerms[] full_terms, int round) {
+	public static void calculate_all_value(MainFrame main_frame, CausalTerms[] full_terms) {
 		// iteratively calculate the raw values of terms 
-		for(int r=round;r<round;r++) {
+		for(int r=0;r<main_frame.iteration_rounds;r++) {
 			for(int t_index=0;t_index<full_terms.length;t_index++) {
 				if(isGene(full_terms[t_index].ID, main_frame) && 
 						!main_frame.gene_exp_finalized[main_frame.gene_names2index.get(full_terms[t_index].ID)]) {
@@ -236,23 +260,23 @@ public class CausalTerms {
 			for(int t=0; t<main_frame.num_trait_T; t++) traits_finalized+=main_frame.trait_finalized[t]?1:0;
 			System.out.println("Round #"+r+" Finished: "+genes_finalized+" Gene finalized; "+traits_finalized+" Traits finalized.");
 		}	// Finished all rounds for biological contributions (regardless of convergence!) 
-		// Before adding noise or infinitesmal terms, output the correlation matrix:
+		// BEFORE adding noise or infinitesmal terms, output the correlation matrix:
 		/* 	public double[][] corr_KxK;	// correlations between gene expressions 
 			public double[][] corr_TxT;	// correlations between traits 
 			public double[][] corr_TxK;	// correlations between traits and expressions */
 		main_frame.calculate_correlations();  
 		/*	public double[][] asso_MxK;	// associations between individual genetic variants and expressions 
 			public double[][] asso_MxT;	// associations between individual genetic variants and traits */
-		calculate_associations(full_terms, main_frame);	 
+		main_frame.calculate_associations(full_terms);	 
 		// Next finalize them by adding noise and inf terms.
 		for(int t_index=0;t_index<full_terms.length;t_index++) {
 			if(isGene(full_terms[t_index].ID, main_frame)) { // adding noise term
-				int focal_term_index=main_frame.gene_names2index.get(this.ID);
+				int focal_term_index=main_frame.gene_names2index.get(full_terms[t_index].ID);
 				main_frame.exp_Z[focal_term_index]=SpecificModels.add_inf_noise_bin(
 						main_frame.exp_Z[focal_term_index], main_frame, full_terms[t_index]);
 			}
 			if(isTrait(full_terms[t_index].ID, main_frame)){ // adding noise term and infinitesmal term (if exists); and transfer to binary (if needed).
-				int focal_term_index=main_frame.trait_names2index.get(this.ID);
+				int focal_term_index=main_frame.trait_names2index.get(full_terms[t_index].ID);
 				main_frame.trait_Y[focal_term_index]=SpecificModels.add_inf_noise_bin(
 						main_frame.trait_Y[focal_term_index], main_frame, full_terms[t_index]);
 			}			

@@ -30,6 +30,7 @@ public class MainFrame {
 	public String genotype_file_format="";
 	public String genes_file=""; 
 	public String pathway_file="";
+	public String output_folder="";
 	
 	// pop-gen parameters 
 	public double max_maf=0.5;
@@ -62,6 +63,8 @@ public class MainFrame {
 	// based on the probabilities below, each gene/trait will be randomly decided on which model it follows. (The sum of all probabilities must be 1.0).  
 	public double[] gene_models= {0.5,0.05,0.05,0.1,0.3}; // proportion of gene expressions with models [0]=additive;[1]=epistatic;[2]=compensatory; [3]=heterogenous; [4]=compound 		
 	public double[] trait_models= {0.5,0.05,0.05,0.1,0.3}; // proportion of traits with models [0]=additive;[1]=epistatic;[2]=compensatory; [3]=heterogenous; [4]=compound
+	
+	public int iteration_rounds= 10;  // number of iterations assigning all terms. (Iteration is needed because of that many terms are not initialized. 
 	
 	public double trait_binary_proportion=0.5;   // proportion of traits that are binary. The rest are quantitative.
 	public static double[] binary_mode_proportion= {0.5,0.5};  // proportion of modes to decide binary: [0]=liability; [1]=logistic
@@ -114,8 +117,8 @@ public class MainFrame {
 	public double[][] var_comp_exp=new double[4][];   // variance components of expressions:[0]=cis;[1]=trans;[2]=other_gene_exp;[3]=trait
 	public double[][] var_comp_trait=new double[3][]; //variance components of traits:[0]=genetics;[1]=gene_exp;[2]=trait.
 	// correlation structures before adding the noise terms. 
-	public double[][] corr_KxK;	// correlations between gene expressions 
-	public double[][] corr_TxT;	// correlations between traits 
+	public double[][] corr_KxK;	// correlations between gene expressions, a triangle matrix this.corr_KxK[k1][k2-k1] = corr(k1,k2) 
+	public double[][] corr_TxT;	// correlations between traits, a triangle matrix  this.corr_TxT[t1][t2-t1] = corr(t1,t2) 
 	public double[][] corr_TxK;	// correlations between traits and expressions
 	public double[][] asso_MxK;	// associations between individual genetic variants and expressions 
 	public double[][] asso_MxT;	// associations between individual genetic variants and traits
@@ -146,12 +149,12 @@ public class MainFrame {
 				if(para[0].equals("Max_MAF"))this.max_maf=Double.parseDouble(para[1]);
 				if(para[0].equals("Min_MAF"))this.min_maf=Double.parseDouble(para[1]);
 				if(para[0].equals("Loc_Distance"))this.location_distance=Integer.parseInt(para[1]);
-				
-
 				// extract detailed models
 				if(para[0].equals("Genotype"))this.genotype_file=para[1];
 				if(para[0].equals("Genotype"))this.genotype_file=para[1];
 				if(para[0].equals("Genotype"))this.genotype_file=para[1];
+				// output folder
+				if(para[0].equals("Output_Folder"))this.output_folder=para[1]+"/";
 
 				line=br.readLine();
 			}br.close();
@@ -167,10 +170,12 @@ public class MainFrame {
 			this.read_in_pathways();
 			// setup genetic-architectures 
 			this.set_terms_model();
-			// generate the data TODO
-			
-			// 
-			this.output_files("");
+			// load terms generated above
+			CausalTerms[] arch_terms=CausalTerms.load_terms_from_file(this.arch_detailed_file); 
+			// iteratively calculate
+			CausalTerms.calculate_all_value(this, arch_terms);			
+			// output all files (omics values, causality graph, and genuine correlations) 
+			this.output_files(this.output_folder);
 			
 		}catch(Exception e) {e.printStackTrace();}
 	}
@@ -476,7 +481,7 @@ public class MainFrame {
 				bw.write(this.trait_models[i]+((i==this.trait_models.length-1)?"}\n":";"));
 			bw.write("##trait_binary_proportion="+this.trait_binary_proportion+"\n");
 			// write the column header
-			bw.write("term_ID\tnum_cis\tnum_trans\ttrans_genes\ttrans_exp\ttraits\tWeights\tModel"
+			bw.write("#term_ID\tnum_cis\tnum_trans\ttrans_genes\ttrans_exp\ttraits\tWeights\tModel"
 					+ "\tInfinitesimal\tNoiseVarianceComponent\n");
 			// WRITE GENES FIRST. assign the terms randomly using the probabilistic parameters
 			for(int k=0;k<this.num_gene_K;k++) {
@@ -752,17 +757,50 @@ public class MainFrame {
 	 * Calculate 
 	 * 	public double[][] corr_KxK;	// correlations between gene expressions
 	 * 	public double[][] corr_TxT;	// correlations between traits 
-		public double[][] corr_TxK;	// correlations between traits and expressions
-		
-		Note that this function may be used in any time, however the current use in OmeSim is before 
-		adding the noise and infinitesmal terms. 
+	 *	public double[][] corr_TxK;	// correlations between traits and expressions
+		Note that this function may be used in any time, however its current use in OmeSim is 
+		BEFORE adding the noise and infinitesmal terms to reflect genuine correlations 
 	 */
 	
-	public void calculate_correlations() {
-		for(int )
+	public void calculate_correlations() { 
+		// assign public double[][] corr_KxK;	// correlations between gene expressions
+		this.corr_KxK=new double[this.num_gene_K][]; // a triangle matrix 
+		for(int k1=0; k1<this.num_gene_K; k1++) {
+			this.corr_KxK[k1]=new double[this.num_gene_K-k1];
+			for(int k2=k1; k2<this.num_gene_K; k2++) {
+				this.corr_KxK[k1][k2-k1]=SpecificModels.correlation(this.exp_Z[k1], this.exp_Z[k2]);
+			}
+		}		
+		// assign public double[][] corr_TxT;	// correlations between traits
+		this.corr_TxT=new double[this.num_trait_T][]; // a triangle matrix 
+		for(int t1=0; t1<this.num_trait_T; t1++) {
+			this.corr_TxT[t1]=new double[this.num_trait_T-t1];
+			for(int t2=t1; t2<this.num_trait_T; t2++) {
+				this.corr_TxT[t1][t2-t1]=SpecificModels.correlation(this.trait_Y[t1], this.trait_Y[t2]);
+			}
+		}	
+		// assign public double[][] corr_TxK;	// correlations between traits and expressions
+		this.corr_TxK=new double[this.num_gene_K][this.num_trait_T];
+		for(int k1=0; k1<this.num_gene_K; k1++) {
+			for(int t1=0; t1<this.num_trait_T; t1++) {
+				this.corr_TxK[t1][k1]=SpecificModels.correlation(this.trait_Y[t1], this.exp_Z[k1]);
+			}
+		}
+	}
+	
+	/*
+	 * Calculate 
+	 *  public double[][] asso_MxK;	// associations between individual genetic variants and expressions 
+	 * 	public double[][] asso_MxT;	// associations between individual genetic variants and traits 
+	 	Note that this function may be used in any time, however its current use in OmeSim is 
+		BEFORE adding the noise and infinitesimal terms to reflect genuine correlations 
+	 */
+	public void calculate_associations(CausalTerms[] full_terms) { //TODO
+		//this.asso_MxK
 	}
 	/*
 	 * Output generated data to files! TODO
+	 * the following data will be written to files:
 	 */
 	public void output_files(String output_file_folder) {
 		try {
@@ -773,7 +811,6 @@ public class MainFrame {
 			bw.write("#traits_contri_weights={");
 			for(int i=0;i<this.traits_contri_weights.length;i++)
 				bw.write(this.traits_contri_weights[i]+((i==this.traits_contri_weights.length-1)?"}\n":";"));
-			
 			bw.close();
 		}catch(Exception e) {e.printStackTrace();}
 	}

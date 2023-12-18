@@ -366,6 +366,33 @@ public class SpecificModels {
 	}
 	
 	/*
+	 * Calculate variance of a vector
+	 */
+	public static double correlation(double[] data1, double[] data2) {
+		if(data1.length!=data2.length) {
+			System.out.println("Error: correlation(data1,data2): data1.length!=data2.length");
+			return Double.NaN;
+		}
+		int length=data1.length;
+		double sum1 = 0, sum2=0;
+		for (int i = 0; i < length; i++) {
+			sum1 += data1[i];
+			sum2 += data2[i];
+		}
+		double mean1 = sum1/length;
+		double mean2 = sum2/length;
+		double numerator = 0;
+		double denominator1=0, denominator2=0;
+		for (int i = 0; i < length; i++) {
+			numerator += (data1[i]-mean1)*(data2[i]-mean2);
+			denominator1 += (data1[i] - mean1)*(data1[i] - mean1);
+			denominator2 += (data2[i] - mean2)*(data2[i] - mean2);
+		}
+		double correlation= numerator/(Math.sqrt(denominator1)*Math.sqrt(denominator2));
+		return correlation;		
+	}
+	
+	/*
 	 * Standardization of an array (so that mean = 0, sd =1) and assign an weight
 	 */
 	public static void standardization(double[] data, double weight) {
