@@ -350,10 +350,13 @@ public class MainFrame {
 				end_index_in_geno_G= -(start_index_in_geno_G + 1) - 1; 
 			}
 			double[][] cis_variants_in_gene=new double[end_index_in_geno_G-start_index_in_geno_G+1][];
-			for(int m=start_index_in_geno_G; m<=end_index_in_geno_G; m++) { // Note that we don't clone the genotype array. So it doesn't cost memory.
-				cis_variants_in_gene[m-start_index_in_geno_G]=this.geno_G[chr_index][m];
+			String[] cis_locs_in_gene=new String[end_index_in_geno_G-start_index_in_geno_G+1];
+			for(int m_index=start_index_in_geno_G; m_index<=end_index_in_geno_G; m_index++) { // Note that we don't clone the genotype array. So it doesn't cost memory.
+				cis_variants_in_gene[m_index-start_index_in_geno_G]=this.geno_G[chr_index][m_index];
+				cis_locs_in_gene[m_index-start_index_in_geno_G]=chr_index+"_"+m_index;
 			}
 			this.gene2filtered_cis_var.put(gene_names[k], cis_variants_in_gene);
+			this.gene2filtered_cis_loc.put(gene_names[k], cis_locs_in_gene);
 		}
 	}
 	

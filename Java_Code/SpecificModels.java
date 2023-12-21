@@ -116,7 +116,7 @@ public class SpecificModels {
 	 * Note that double[][] grm is NOT used yet. Here use the sum of many small contributors. 
 	 */
 	public static double[] add_infinitesimal_term(MainFrame main_frame, double[] original, double vc) {
-		double[][] vars = CausalTerm.sample_geno_vars_wg(main_frame.num_infinitesimal, main_frame);
+		double[][] vars = CausalTerm.sample_genotype_vars_wg(main_frame.num_infinitesimal, main_frame);
 		double[] inf_value=new double[main_frame.num_subj_N];
 		double[] coefs=new double[main_frame.num_infinitesimal];
 		for(int m=0;m<main_frame.num_infinitesimal;m++) {

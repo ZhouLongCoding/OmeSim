@@ -50,7 +50,9 @@ public class CausalTerm {
 	//
 	// genotype locations and allele-values will be generated and extracted once and used in all iterations
 	public double[][] geno_G_cis_var=null;
+	public String[] geno_G_cis_loc=null;  // format: chr-index_loc_index (indexes are in MainFrame.geno_G[][]
 	public double[][] geno_G_trans_var=null;
+	public String[] geno_G_trans_loc=null; // format: chr-index_loc_index (indexes are in MainFrame.geno_G[][]
 	// however, expressions and traits will be extracted each time as they may be changed over the iterations. 
 	public double[][] exp_Z_val=null;
 	public double[][] trait_Y_val=null;
@@ -60,6 +62,13 @@ public class CausalTerm {
 	 * 
 	 * #term_ID	num_cis	num_trans	trans_genes		trans_exp		traits		Weights			Model		Infinitesimal	NoiseVarianceComponent
 	 * ID		10		5			gene1,gene2		gene1,gene2		trt1,trt2	1.0,0.5,4.0,2.0	additive	vc_value_inf	vc_value_noise
+	 * 
+	 * This constructor will assign genotype locations and values and, importantly, assign back to MainFrame main_frame:
+	 * 		public HashMap<String, double[][]> gene2selected_var;  // map each gene to its selected expression-causal variants. 
+			public HashMap<String, String[]> gene2selected_loc;    // the location of the selected expression-causal variants.
+								// Format: chr-index_loc-index, the indexes are for public int[][] geno_variant_locs;
+			public HashMap<String, double[][]> trait2selected_var;  // map each trait to its selected causal variants. 
+			public HashMap<String, String[]> trait2selected_loc;  
 	 */
 	public CausalTerm(String info_line, MainFrame main_frame) {
 		String[] info=info_line.split("\t");
@@ -77,8 +86,43 @@ public class CausalTerm {
 		this.infinitesimal_vc_value=Double.parseDouble(info[8]);
 		this.noise_vc_value=Double.parseDouble(info[9]);
 		// extract genotype data from main_frame.geno_G, 
-		
-		// Note that the expression and trait data will be exgtracted from main_frame.trait_Y, and main_frame.exp_Z during the iterations.
+		this.sample_geno_vars_in_genes_(main_frame);
+		// assign back to MainFrame
+		if(isGene(this.ID, main_frame)) {
+			if(this.geno_G_trans_var!=null && this.geno_G_cis_var==null) {
+				main_frame.gene2selected_var.put(this.ID, this.geno_G_trans_var);
+				main_frame.gene2selected_loc.put(this.ID, this.geno_G_trans_loc);
+			}else if(this.geno_G_trans_var==null && this.geno_G_cis_var!=null) {
+				main_frame.gene2selected_var.put(this.ID, this.geno_G_cis_var);
+				main_frame.gene2selected_loc.put(this.ID, this.geno_G_cis_loc);
+			}else if(this.geno_G_trans_var!=null && this.geno_G_cis_var!=null) {
+				double[][] combined_var=new double[this.num_cis+this.num_trans][];
+				String[] combined_loc=new String[this.num_cis+this.num_trans];
+				for(int m_cis=0;m_cis<this.num_cis;m_cis++) {
+					combined_var[m_cis]=this.geno_G_cis_var[m_cis];
+					combined_loc[m_cis]=this.geno_G_cis_loc[m_cis];
+				}
+				for(int m_trans=0;m_trans<this.num_trans;m_trans++) {
+					combined_var[this.num_cis+m_trans]=this.geno_G_trans_var[m_trans];
+					combined_loc[this.num_cis+m_trans]=this.geno_G_trans_loc[m_trans];
+				}
+				main_frame.gene2selected_var.put(this.ID, combined_var);
+				main_frame.gene2selected_loc.put(this.ID, combined_loc);
+			}
+			
+		}else if(isTrait(ID, main_frame)) {
+			if(this.geno_G_trans_var!=null) {
+				main_frame.trait2selected_var.put(this.ID, this.geno_G_trans_var);
+				main_frame.trait2selected_loc.put(this.ID, this.geno_G_trans_loc);
+			}
+			
+		}else {
+			System.out.println("Error: Term ID "+this.ID+" is not a gene or a trait!");
+		}
+		/* 	Note that the contributing expression and trait data will be extracted from main_frame.trait_Y and 
+		 *  and main_frame.exp_Z during the iterations in calculate_this_ID(). Therefore, no operations on 
+		 *  them in the constructor.
+		 */  
 	}
 
 	/*
@@ -117,25 +161,16 @@ public class CausalTerm {
 	 * (3) Calculate the values of this term using Model column.
 	 * 
 	 * Note that this function may be run many rounds to improve the number of finalized.
-	 * Some terms may be never finalized, however mathematically could be converged. 
+	 * Some terms may be never finalized, however mathematically could be converged. Genotype
+	 * data will be extracted in advance (NOT in this function) therefore won't be updated 
+	 * during the iterations.  
 	 * 
 	 * The output is "raw" values without adding infinitesimal and noise terms. 
 	 * All are quantitative, not binary yet.  
 	 */
 	public void calculate_this_ID(MainFrame main_frame) {
-		if(isGene(this.ID, main_frame)) { // this term is a gene, only which has cis
-			String[] gene_itself = {this.ID};
-			if(this.num_cis!=-1)
-				this.geno_G_cis_var=this.sample_geno_vars_in_genes(gene_itself, this.num_cis, main_frame);
-		}else if(!isTrait(this.ID, main_frame)) { // also not a trait -- error!
-			System.out.println("Error: Term ID "+this.ID+" is not a gene or a trait!");
-		}
-		//regardless of gene or trait, extract the data of trans-var, trans-exp, and terms.
-		// trans genetic variants 
-		if(this.num_trans!=-1)
-			this.geno_G_trans_var=this.sample_geno_vars_in_genes(this.trans_var_genes, this.num_trans, main_frame);
-		// trans expressions and traits. gene_exp_finalized will be assigned to true if all dependent 
-		// terms that are finalized
+		//regardless of the term being gene or trait, extract the data of contributing trans-exp and traits.
+		// trans expressions and traits. gene_exp_finalized will be assigned to true if all dependent terms that are finalized
 		boolean exps_finalized=true, traits_finalized=true; // default being true because that it will be true if nothing happened below (i.e., no gene-exp or traits involved) 
 		if(this.trans_exp_genes!=null) {
 			exps_finalized=this.get_term_vals(this.trans_exp_genes, main_frame);
@@ -163,40 +198,49 @@ public class CausalTerm {
 	 * Note that this method covers both cis and trans variants sampling. In case of cis,
 	 * just pass only one gene (i.e., {itself}) to gene_names.  
 	 * 
-	 * A problem might be that the variants are sampled proportional to the gene length. 
-	 * A FUTURE development may make it more "fair" by giving more weights to shorter genes.
+	 * A problem might be that the variants are NOT sampled proportional to the gene length, which is unfair for large genes. 
+	 * A FUTURE development may make it more "fair" by giving more weights to larger genes.
 	 */
-	public static double[][] sample_geno_vars_in_genes(String[] gene_names, int num_sampling_vars, MainFrame main_frame){
-		if(num_sampling_vars<0) // for terms without genetic component, the number of variants are set to -1 by MainFrame.set_terms_model().
-			return null;
+	public void sample_geno_vars_in_genes_(MainFrame main_frame){
 		if(main_frame.gene2filtered_cis_var==null) {
 			System.out.println("Error: this.gene2filtered_cis_var not initiated!");
-			return null;
+			return;
 		}
-		// distribute num_vars variants into genes in gene_names[]. the larger genes get more share!
-		int total_var_num=0;
-		for(int k=0;k<gene_names.length;k++) {
-			total_var_num+=main_frame.gene2filtered_cis_var.get(gene_names[k]).length;
+		if(isGene(this.ID, main_frame)) { // this term is a gene, only which has cis
+			if(this.num_cis!=-1) {
+				this.geno_G_cis_var=new double[this.num_cis][];
+				this.geno_G_cis_loc=new String[this.num_cis];
+				double[][] vars_in_the_gene=main_frame.gene2filtered_cis_var.get(this.ID);
+				String[] locs_in_the_gene=main_frame.gene2filtered_cis_loc.get(this.ID);
+				for(int m_cis=0;m_cis<this.num_cis;m_cis++) {								
+					int var_index=main_frame.generator.nextInt(vars_in_the_gene.length);
+					this.geno_G_trans_var[m_cis]=vars_in_the_gene[var_index];
+					this.geno_G_trans_loc[m_cis]=locs_in_the_gene[var_index];
+				}
+			}
 		}
-		double[][] all_vars_combined=new double[total_var_num][];
-		int var_index_all_genes=0;
-		for(int k=0;k<gene_names.length;k++) {
-			double[][] var_in_a_gene=main_frame.gene2filtered_cis_var.get(gene_names[k]);
-			for(int m=0;m<var_in_a_gene.length;m++)
-				all_vars_combined[var_index_all_genes++]=var_in_a_gene[m];
+		// trans genetic variants 
+		if(this.num_trans!=-1) {
+			//  this.geno_G_trans_var=this.sample_geno_vars_in_genes(this.trans_var_genes, this.num_trans, main_frame);
+			this.geno_G_trans_var=new double[this.num_trans][];
+			this.geno_G_trans_loc=new String[this.num_trans]; 
+			// distribute num_vars variants into genes in gene_names[]. the all genes get an equal share!
+			for(int m_trans=0;m_trans<this.num_trans;m_trans++) {
+				int gene_index=main_frame.generator.nextInt(this.trans_var_genes.length); // sample a genetic variant from this gene
+				double[][] vars_in_a_gene=main_frame.gene2filtered_cis_var.get(trans_var_genes[gene_index]);
+				String[] locs_in_a_gene=main_frame.gene2filtered_cis_loc.get(trans_var_genes[gene_index]);
+				int var_index=main_frame.generator.nextInt(vars_in_a_gene.length);
+				this.geno_G_trans_var[m_trans]=vars_in_a_gene[var_index];
+				this.geno_G_trans_loc[m_trans]=locs_in_a_gene[var_index];
+			}		
 		}
-		double[][] sampled_vars=new double[num_sampling_vars][];
-		for(int m=0;m<num_sampling_vars;m++) {  // no deep clone; therefore no cost of memory.
-			sampled_vars[m]=all_vars_combined[main_frame.generator.nextInt(total_var_num)];
-		}
-		return sampled_vars;
 	}
 	
 	/*
 	 * randomly sample genotype variants from geno_G without considering genes 
 	 * 
 	 */
-	public static double[][] sample_geno_vars_wg(int num_sampling_vars, MainFrame main_frame){
+	public static double[][] sample_genotype_vars_wg(int num_sampling_vars, MainFrame main_frame){
 		if(num_sampling_vars<0) // for terms without genetic component, the number of variants are set to -1 by MainFrame.set_terms_model().
 			return null;
 		double[][] sampled_vars=new double[num_sampling_vars][];
