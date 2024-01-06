@@ -82,14 +82,24 @@ public class SpecificModels {
 		int sample_size = X.length;
 		int num_var = X[0].length;
 		double[] response=new double[sample_size];
-		if(num_var>2) {
-			System.out.println("WARNING: compensatory model only supports 2 variables! The first two are used.");
+		if(num_var==1) {
+			//Debug System.out.println("WARNING: compensatory model only supports 2 variables! But there is only 1 variable: will return the sign of this variable.");
+			for(int i=0;i<sample_size;i++) {
+				if((X[i][0]>0))
+					response[i]=SpecificModels.positive_response;
+				else response[i]=SpecificModels.nagative_response;
+			}
+		}else {
+			if(num_var>2) {
+				//Debug System.out.println("WARNING: compensatory model only supports 2 variables! The first two are used.");
+			}
+			for(int i=0;i<sample_size;i++) {
+				if((X[i][0]>0 && X[i][1]>0)||(X[i][0]<=0 && X[i][1]<=0))
+					response[i]=SpecificModels.positive_response;
+				else response[i]=SpecificModels.nagative_response;
+			}
 		}
-		for(int i=0;i<sample_size;i++) {
-			if((X[i][0]>0 && X[i][1]>0)||(X[i][0]<=0 && X[i][1]<=0))
-				response[i]=SpecificModels.positive_response;
-			else response[i]=SpecificModels.nagative_response;
-		}return response;
+		return response;
 	}
 	
 	/*
@@ -238,7 +248,11 @@ public class SpecificModels {
 			supported_models.add(SpecificModels.supported_models[m]);
 		HashMap<String, double[]> all_terms=new HashMap<String, double[]>();
 		for(int t=0;t<num_var;t++) {
-			all_terms.put("X"+t, X[t]);
+			double[] transpose_X_t=new double[sample_size];  // has to transpose a row into a column for X_t
+			for(int i=0;i<sample_size;i++) {
+				transpose_X_t[i]=X[i][t]; 
+			}
+			all_terms.put("X"+t, transpose_X_t);
 		}
 		for(int s=0;s<compound_protocol.num_steps;s++) {
 			//String[] info=line.split("\t"); // ID, model, terms 
@@ -247,10 +261,10 @@ public class SpecificModels {
 				System.out.println("Error: There is no support for nested compound.");
 				return null;
 			}
-			double[][] input_X=new double[sample_size][compound_protocol.terms[s].length];
+			double[][] input_X=new double[sample_size][compound_protocol.step_terms[s].length];
 			for(int i=0;i<sample_size;i++) {
-				for(int k=0;k<compound_protocol.terms[s].length;k++) {
-					input_X[i][k]=all_terms.get(compound_protocol.terms[s][k])[i];
+				for(int k=0;k<compound_protocol.step_terms[s].length;k++) {
+					input_X[i][k]=all_terms.get(compound_protocol.step_terms[s][k])[i];
 				}
 			}
 			double[] the_new_term=response(compound_protocol.step_models[s], input_X, SpecificModels.default_weight);

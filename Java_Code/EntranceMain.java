@@ -5,7 +5,9 @@ public class EntranceMain {
 	public static void main(String[] args) {
 		
 		// user interface
-		System.out.println("OmeSim: Simulating phenotype and in-between-ome(s) based on genotype.");
+		System.out.println("***********************************************************************\n"
+				+ "OmeSim: Simulating phenotype and in-between-ome(s) based on genotype.\n"
+				+ "***********************************************************************\n");
 		if(args.length==0) {
 			System.out.println("Usage: ");
 			System.out.println("\tjava -Xmx4g -jar omesim.jar <function> <-parameter(s)>");

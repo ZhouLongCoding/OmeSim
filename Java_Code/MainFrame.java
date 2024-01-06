@@ -34,7 +34,7 @@ public class MainFrame {
 	
 	// POP-GENE PARAMETERS 
 	public double max_maf=0.5;
-	public double min_maf=0.05;
+	public double min_maf=0.0;
 	public int location_distance=0; // this is used to guard against LD;
 	
 	// Number OF ITERATIONS (Iteration is needed because of that many terms are not initialized and will be iteratively assigned). 
@@ -43,10 +43,12 @@ public class MainFrame {
 	// GENETIC ARCHITECTURE & MODEL (all parameters are general proportions to guide the random assignment of terms)
 	// based on the probabilities of contributors below, each gene/trait will be randomly decided on whether it contains corresponding contributors 
 	public double[] gene_contributors= {1.0, 0.5, 0.3, 0};  // proportion of gene expressions that have the contribution from [0]=cis;[1]=trans;[2]=other_gene_exp;[3]=trait.  
-	public double[] traits_contributors={1.0, 0.8, 0.5, 0.3};  //proportion of traits that have the contribution from [0]=genetics;[1]=gene_exp;[2]=trait,[3]=infinitesimal.
+	public double[] traits_contributors={Double.NaN, 1.0, 0.8, 0.5, 0.3};  //proportion of traits that have the contribution from [0]=cis;[1]=genetics;[2]=gene_exp;[3]=trait,[4]=infinitesimal.
 	// parameters to guide percentage of contributions 
 	public double[] gene_contri_weights= {1.0, 0.5, 4.0, 2.0};  // weights of gene-contributors from [0]=cis;[1]=trans;[2]=other_gene_exp;[3]=trait.  
-	public double[] traits_contri_weights={1.0, 4.0, 2.0};  // weights of trait-contributors from [0]=genetics;[1]=gene_exp;[2]=trait; No infinitesimal at this stage as [4]=infinitesimal will be added later before adding noise.
+	public double[] traits_contri_weights={Double.NaN, 1.0, 4.0, 2.0};  // weights of trait-contributors from [0]=cis;[1]=trans; [2]=gene_exp;[3]=trait;
+															// Note that [0]=cis is always Double.NaN as there is no cis for traits. However OmeSim keep this as the same format to genes for the convenience of calculation in public double[][] CausalTerm.combine_arrays_weighted()  
+															//No [4]=infinitesimal at this stage as infinitesimal component will be added later before adding noise.
 	public double weights_relative_range = 0.5; 			// relative range of the above gene_contri_weights[] and traits_contri_weights[]
 	public double traits_var_comp_inf_min = 0.05;  // minimal variance component for the infinitesimal term: traits only (no genes).  
 	public double traits_var_comp_inf_max = 0.45;  // maximal variance component for the infinitesimal term: traits only (no genes).  
@@ -54,6 +56,7 @@ public class MainFrame {
 	public double var_comp_noise_max = 0.9;  // Note that the noise term will be added after the infinitesimal term, and the nomalization will be conducted again.   
 
 	public int cis_var_flanking = 500000;	// flanking regions in base-pair defining the region for cis-variants. 
+	public int min_var_gene = 10; 			// if a gene (and its flanking cis region contains #SNV < min_var_gene, it will be removed.   
 	public int cis_variant_numbers_mean= 5;  // mean of number of cis-variants of a gene 
 	public int cis_variant_numbers_range= 10;  // range of number of cis-variants of a gene. Note that negative number will be converted to zero 
 	public int trans_variant_numbers_mean= 5;  // mean of number of trans-variants of a gene (multiple genes will share the total number of variants.)
@@ -64,7 +67,7 @@ public class MainFrame {
 	public int num_contributing_traits_range=1; 	 // range of number of traits contributing to exp or traits. 
 	public int num_infinitesimal = 5000; 		// the number of genetic variants whose linearly added effect will serve as the infinitesimal term 
 	// based on the probabilities below, each gene/trait will be randomly decided on which model it follows. (The sum of all probabilities must be 1.0).  
-	public double[] gene_models= {0.5,0.05,0.05,0.1,0.3}; // proportion of gene expressions with models [0]=additive;[1]=epistatic;[2]=compensatory; [3]=heterogenous; [4]=compound 		
+	public double[] gene_models= {0.5,0.2,0.2,0.05,0.05}; // proportion of gene expressions with models [0]=additive;[1]=epistatic;[2]=compensatory; [3]=heterogenous; [4]=compound 		
 	public double[] trait_models= {0.5,0.05,0.05,0.1,0.3}; // proportion of traits with models [0]=additive;[1]=epistatic;[2]=compensatory; [3]=heterogenous; [4]=compound
 	// binary vs quantitative models for traits
 	public double trait_binary_proportion=0.5;   // proportion of traits that are binary. The rest are quantitative.
@@ -75,7 +78,7 @@ public class MainFrame {
 	public int num_subj_N;		// #subjects, or sample size, N. 
 	public String[] subj_names;	// names of all subjects
 	// traits related
-	public int num_trait_T=10;		// #traits T default = 10
+	public int num_trait_T=30;		// #traits T default = 30
 	public String[] trait_names;// in the format of T_ID;
 	public HashMap<String, Integer> trait_names2index = new HashMap<String, Integer>();
 	public boolean[] trait_finalized;  // finalized means no dependence on other terms that are not finalized. 
@@ -167,9 +170,9 @@ public class MainFrame {
 		try {
 			BufferedReader br= new BufferedReader(new FileReader(parameter_file));
 			String line=br.readLine();
-			while(line!=null) {
-				// skip headers
-				if(line.startsWith("#"))line=br.readLine(); 
+			// skip headers
+			while(line.startsWith("#"))line=br.readLine(); 
+			while(line!=null) {	
 				// parse parameters from the file
 				String[] para=line.split("="); //para[0]=name; para[1]=value.
 				// extract file paths of real-data  				
@@ -191,9 +194,9 @@ public class MainFrame {
 				if(para[0].equals("Genotype"))this.genotype_file=para[1];
 				// output folder
 				if(para[0].equals("Output_Folder"))this.output_folder=para[1]+"/";
-
 				line=br.readLine();
 			}br.close();
+			System.out.println("Finished loading parameters.");
 		}catch(Exception e) {e.printStackTrace();}
 	}
 	/*
@@ -234,13 +237,13 @@ public class MainFrame {
 			int current_chr_index=-1;  // started with -1, and will be updated at the first line to 0. 
 			String current_chr_name="PlaceHolderThatIsNotChrName";  
 			if(this.genotype_file_format.equals("CSV")) {
-				while(line.startsWith("##")) { // skip the general headers, if any
-					line=br.readLine();
-				}
+				while(line.startsWith("##")) line=br.readLine();// skip the general headers, if any
 				String[] header=line.split(",");
 				this.num_subj_N=header.length-2;
+				System.out.println("\tSample size N="+this.num_subj_N);
 				this.subj_names=new String[this.num_subj_N];
 				for(int n=0;n<this.num_subj_N;n++)this.subj_names[n]=header[n+2];
+				line=br.readLine();
 				while(line!=null) {
 					String[] tmp=line.split(",");
 					if(!current_chr_name.equals(tmp[0])) { // a new chromosome					
@@ -251,6 +254,10 @@ public class MainFrame {
 						chr_names_array.add(current_chr_name);
 						//move forward until identifying the first line with a qualified MAF
 						double[] alleles=new double[this.num_subj_N];
+//						if(tmp.length<this.num_subj_N+2) {//Debug
+//							System.out.println(tmp.length);
+//							System.out.println(line);
+//						}
 						for(int n=0;n<this.num_subj_N;n++)alleles[n]=Double.parseDouble(tmp[n+2]);
 						double maf= maf(alleles);
 						while (!(maf>=this.min_maf && maf <=this.max_maf)){
@@ -270,12 +277,18 @@ public class MainFrame {
 						geno_variant_locs_array.add(this_chr_locs);
 						ArrayList<double[]> this_chr_geno_G=new ArrayList<double[]>(); // genotype arrays per chr
 						this_chr_geno_G.add(alleles);
-						geno_G_array.add(this_chr_geno_G);									
+						geno_G_array.add(this_chr_geno_G);		
+						line=br.readLine();
 					}else {		// the same chromosome, continue adding variants
 						int current_loc = Integer.parseInt(tmp[1]);
 						if(current_loc - last_loc>=this.location_distance) { // satisfied the distance (LD) interval.
 							double[] alleles=new double[this.num_subj_N];
-							for(int n=0;n<this.num_subj_N;n++)alleles[n]=Double.parseDouble(tmp[n+2]);
+							
+							for(int n=0;n<this.num_subj_N;n++) {
+								alleles[n]=
+										Double.parseDouble(tmp[n+2]);
+							}
+									
 							double maf= maf(alleles);
 							if(maf>=this.min_maf && maf <=this.max_maf) { // satisfied the MAF requirement 
 								last_loc = current_loc;
@@ -313,7 +326,12 @@ public class MainFrame {
 			}
 			br.close();
 		}catch(Exception e) {e.printStackTrace();}
-		
+		// initiate structures for selected variants, although not assign it in this function.  
+		this.gene2selected_loc=new HashMap<String, String[]>();
+		this.gene2selected_var=new HashMap<String, double[][]>();
+		this.trait2selected_loc=new HashMap<String, String[]>();
+		this.trait2selected_var=new HashMap<String, double[][]>();
+		System.out.println("Finished reading genotype file.");
 	}
 	
 	/*
@@ -330,40 +348,96 @@ public class MainFrame {
 	}
 	
 	/*
-	 * set up public HashMap<String, double[][]> gene2filtered_cis_var after readin_genotype_with_maf_ld_filters()
+	 * Set up public HashMap<String, double[][]> gene2filtered_cis_var after readin_genotype_with_maf_ld_filters()
+	 * 
+	 * If a gene has number of variants lower than this.min_var_gene, it will be added to 
+	 * ArrayList<String> too_small_genes, and then be removed by 
+	 * public void removing_small_genes(ArrayList<String> too_small_genes),
+	 * which is called at the end of this function.  
 	 */
 	public void set_gene2cis_var_map() {
 		this.gene2filtered_cis_var = new HashMap<String, double[][]>();
+		this.gene2filtered_cis_loc = new HashMap<String, String[]>();
+		HashSet<String> too_small_genes=new HashSet<String>();
 		for(int k=0;k<this.num_gene_K;k++) {
 			int[] gene_chr_locs=this.gene_locs.get(gene_names[k]);  //[0]=chr_index; [1]=start; [2]=end.
 			int chr_index=gene_chr_locs[0];
 			int start=gene_chr_locs[1] - this.cis_var_flanking;
 			int end = gene_chr_locs[2] + this.cis_var_flanking;
 			// Note that it is OK if start < 0 or end > the last location as the insertion point will ensure this. 
-			end = end + this.cis_var_flanking; 
 			int start_index_in_geno_G = Arrays.binarySearch(this.geno_variant_locs[chr_index], start);
 			if(start_index_in_geno_G<0) { //Arrays.binarySearch returns (-(insertion point) - 1) if not found
 				start_index_in_geno_G= -(start_index_in_geno_G + 1);
+				//Debug System.out.println(k+";"+this.gene_names[k]+";start"+start_index_in_geno_G);
 			}
 			int end_index_in_geno_G = Arrays.binarySearch(this.geno_variant_locs[chr_index], end);
 			if(end_index_in_geno_G<0) { //Arrays.binarySearch returns (-(insertion point) - 1) if not found
-				end_index_in_geno_G= -(start_index_in_geno_G + 1) - 1; 
+				end_index_in_geno_G= -(end_index_in_geno_G + 1) - 1;
+				//Debug System.out.println(k+";"+this.gene_names[k]+";end"+end_index_in_geno_G);
 			}
-			double[][] cis_variants_in_gene=new double[end_index_in_geno_G-start_index_in_geno_G+1][];
-			String[] cis_locs_in_gene=new String[end_index_in_geno_G-start_index_in_geno_G+1];
-			for(int m_index=start_index_in_geno_G; m_index<=end_index_in_geno_G; m_index++) { // Note that we don't clone the genotype array. So it doesn't cost memory.
-				cis_variants_in_gene[m_index-start_index_in_geno_G]=this.geno_G[chr_index][m_index];
-				cis_locs_in_gene[m_index-start_index_in_geno_G]=chr_index+"_"+m_index;
+			int num_var_in_gene=end_index_in_geno_G-start_index_in_geno_G+1;
+			if(num_var_in_gene<this.min_var_gene) { // too small a gene. 
+				too_small_genes.add(this.gene_names[k]);
+				//System.out.println(this.gene_names[k]+"\t"+num_var_in_gene);
+			}else {  // #SNV good. add to the cis_var structures 
+				double[][] cis_variants_in_gene=new double[num_var_in_gene][];
+				String[] cis_locs_in_gene=new String[num_var_in_gene];
+				for(int m_index=start_index_in_geno_G; m_index<=end_index_in_geno_G; m_index++) { // Note that we don't clone the genotype array. So it doesn't cost memory.
+					cis_variants_in_gene[m_index-start_index_in_geno_G]=this.geno_G[chr_index][m_index];
+					cis_locs_in_gene[m_index-start_index_in_geno_G]=chr_index+"_"+m_index;
+				}
+				this.gene2filtered_cis_var.put(gene_names[k], cis_variants_in_gene);
+				this.gene2filtered_cis_loc.put(gene_names[k], cis_locs_in_gene);
 			}
-			this.gene2filtered_cis_var.put(gene_names[k], cis_variants_in_gene);
-			this.gene2filtered_cis_loc.put(gene_names[k], cis_locs_in_gene);
 		}
+		// remove small genes.  
+		this.remove_small_genes(too_small_genes);
+		this.exp_Z=new double[this.num_gene_K][this.num_subj_N]; // initialized as zeros for first round of calculation (before finalized)
+		this.trait_Y=new double[this.num_trait_T][this.num_subj_N]; // initialized as zeros for first round of calculation (before finalized)
+		System.out.println("Finished setting gene2cis variants maps.");
+	}
+	
+	/*
+	 * Based on the ArrayList<String> too_small_genes collected in public void set_gene2cis_var_map(),
+	 * it will remove the genes that are too small from the following attributes:
+			public int num_gene_K;		
+			public String[] gene_names;	
+			public HashMap<String, Integer> gene_names2index
+			public HashMap<String, int[]> gene_locs 
+			public boolean[] gene_exp_finalized; 
+	 * 
+	 * Note that the chr is an index, starting with 0, 
+	 * start and end locations are from 1, consistent to the typical GFF files. 
+	 */
+	
+	public void remove_small_genes(HashSet<String> too_small_genes) {
+//		System.out.println("this.num_gene_K="+this.num_gene_K);
+//		System.out.println("too_small_genes.size()="+too_small_genes.size());
+//		System.out.println(too_small_genes);
+		int updated_num_gene_K=this.num_gene_K - too_small_genes.size();
+		String[] updated_gene_names= new String[updated_num_gene_K]; 
+		int k_new=0;
+		for(int k=0;k<this.num_gene_K;k++) { //this.num_gene_K is the old one. check all genes. 
+			if(!too_small_genes.contains(this.gene_names[k])) { // qualified genes. add to updated_names
+				updated_gene_names[k_new]=this.gene_names[k];
+				this.gene_names2index.put(updated_gene_names[k_new], k_new);
+				k_new++;
+			}else {
+				this.gene_names2index.remove(this.gene_names[k]);
+				this.gene_locs.remove(this.gene_names[k]);
+			}
+		}
+		this.num_gene_K=updated_num_gene_K;
+		this.gene_names=updated_gene_names;
+		this.gene_exp_finalized=new boolean[updated_num_gene_K];
+		System.out.println("\tRemoved "+too_small_genes.size()+" too small genes with #var<"+this.min_var_gene+"."
+				+ " After removal, "+this.num_gene_K+" genes are retained.");
 	}
 	
 	/*
 	 * Read in Pathway membership from a file
 	 * 
-	 * Pathway_ID"\t"Gene1,Gene2,...Genen
+	 * Pathway_ID"\t"Gene_1,Gene_2,...Gene_n
 	 * 
 	 * the first column is "\t" separated from the second; and the genes in the second column uses ",". 
 	 *
@@ -371,6 +445,8 @@ public class MainFrame {
 	 *  	public String[] pathway_names;
 			public HashMap<String, String[]> pathways
 	 *  	public HashMap<String, ArrayList<String>> gene2pathways 
+	 *  
+	 *  Note that only genes in this.gene_names will be added. 
 	 */
 	public void read_in_pathways() {
 		try {
@@ -382,7 +458,15 @@ public class MainFrame {
 				// parse parameters from the file
 				String[] para=line.split("\t"); //para[0]=Pathway_ID; para[1]=list of gene_IDs
 				String pathway=para[0];
-				String[] genes= para[1].split(",");
+				String[] original_genes= para[1].split(",");
+				// remove genes that are not in the list with enough SNVs in the genotype file:
+				ArrayList<String> genes_list=new ArrayList<String>();
+				for(int ko=0;ko<original_genes.length;ko++) {
+					if(this.gene2filtered_cis_loc.containsKey(original_genes[ko]))
+						genes_list.add(original_genes[ko]);
+				}
+				String[] genes=new String[genes_list.size()];
+				for(int k=0;k<genes.length;k++)genes[k]=genes_list.get(k);
 				this.pathways2genes.put(pathway, genes); 
 				for(int g=0;g<genes.length;g++) {
 					if(this.gene2pathways.containsKey(genes[g])) {
@@ -399,12 +483,13 @@ public class MainFrame {
 			}br.close();			
 			this.pathway_names=this.pathways2genes.keySet().toArray(new String[this.pathways2genes.size()]);
 		}catch(Exception e) {e.printStackTrace();}
+		System.out.println("Finished reading pathways.");
 	}
 	
 	/*
 	 * Read in genes_file
-	 * the format looks like: gene_ID	chr_num	start_loc	end_loc
-	 * columns separated by "\t"
+	 * the format looks like: gene_ID,chr_num,start_loc,end_loc
+	 * columns separated by ","
 	 * 
 	 * It will initiate the following attributes:
 			public int num_gene_K;		
@@ -413,24 +498,29 @@ public class MainFrame {
 			public HashMap<String, int[]> gene_locs 
 			public boolean[] gene_exp_finalized; 
 	 * 
-	 * Note that the chr, start, and end are from 1, consistent to the typical GFF files. although in the code, the indexes start at 0. 
+	 * Note that the chr is an index, starting with 0, 
+	 * start and end locations are from 1, consistent to the typical GFF files. 
 	 */
 	public void read_in_genes_locs() {
 		ArrayList<String> gene_names_list=new ArrayList<String>();
 		try {
 			BufferedReader br= new BufferedReader(new FileReader(this.genes_file));
 			String line=br.readLine();
+			// skip headers
+			while(line.startsWith("#"))line=br.readLine(); 
 			while(line!=null) {
-				// skip headers
-				if(line.startsWith("#"))line=br.readLine(); 
 				// parse parameters from the file
-				String[] para=line.split("\t"); //para[0]=Gene_ID; para[1]=chr_value; para[2]=start_loc; para[3]=end_loc.
+				String[] para=line.split(","); //para[0]=Gene_ID; para[1]=chr_value; para[2]=start_loc; para[3]=end_loc.
 				int[] gene_locations=new int[3];
-				gene_locations[0]=this.chr2index.get(para[1]);
-				gene_locations[1]=Integer.parseInt(para[2]);
-				gene_locations[2]=Integer.parseInt(para[3]);
-				gene_names_list.add(para[0]);
-				this.gene_locs.put(para[0], gene_locations);
+				if(this.gene_locs.containsKey(para[0])) {
+					System.out.println("\tWarning: Gene "+para[0]+" has mutilple lines in the gene_file. The first is loaded.");
+				}else {
+					gene_locations[0]=this.chr2index.get(para[1]);
+					gene_locations[1]=Integer.parseInt(para[2]);
+					gene_locations[2]=Integer.parseInt(para[3]);
+					gene_names_list.add(para[0]);
+					this.gene_locs.put(para[0], gene_locations);
+				}				
 				line=br.readLine();
 			}br.close();			
 		}catch(Exception e) {e.printStackTrace();}
@@ -442,6 +532,7 @@ public class MainFrame {
 			this.gene_names[k]=gene_names_list.get(k);
 			this.gene_names2index.put(this.gene_names[k], k);
 		}
+		System.out.println("Finished reading gene locations: "+this.num_gene_K+" genes loaded.");
 	}
 	
 	/* 
@@ -456,8 +547,10 @@ public class MainFrame {
 			public HashMap<String, ArrayList<String>> causality_graph;
 	 */
 	public void set_terms_model() {
+		System.out.println("Started generating terms model file.");
 		this.trait_names=new String[this.num_trait_T]; 
 		this.trait_finalized=new boolean[this.num_trait_T];
+		this.causality_graph=new HashMap<String, ArrayList<String>>();
 		Arrays.fill(this.trait_finalized, false);
 		for(int t=0;t<this.num_trait_T;t++) {
 			this.trait_names[t]=(generator.nextDouble()<=this.trait_binary_proportion?"Binary":"Quantitative")+"_Trait_"+String.format("%04d",t);
@@ -502,7 +595,8 @@ public class MainFrame {
 			// write the column header
 			bw.write("#term_ID\tnum_cis\tnum_trans\ttrans_genes\ttrans_exp\ttraits\tWeights\tModel"
 					+ "\tInfinitesimal\tNoiseVarianceComponent\n");
-			// WRITE GENES FIRST. assign the terms randomly using the probabilistic parameters
+			// assign the terms randomly using the probabilistic parameters
+			// ===== WRITE GENES FIRST ===== 
 			for(int k=0;k<this.num_gene_K;k++) {
 				ArrayList<String> causal_terms_of_this_gene = new ArrayList<String>();
 				double[] actual_g_weights = new double[this.gene_contri_weights.length]; // [0]=cis;[1]=trans;[2]=other_gene_exp;[3]=trait. 
@@ -529,7 +623,8 @@ public class MainFrame {
 					if(trans_gene_num<=1) trans_gene_num=1;
 					String[] genes_in_pathway=sample_genes_in_pathways(gene_names[k], trans_gene_num);
 					for(int kp=0;kp<genes_in_pathway.length;kp++) {
-						causal_terms_of_this_gene.add(genes_in_pathway[kp]+"_Genet");
+						causal_terms_of_this_gene.add(genes_in_pathway[kp]);
+						//causal_terms_of_this_gene.add(genes_in_pathway[kp]+"_Genet"); Old version that distinguish genetic and expression
 						bw.write(genes_in_pathway[kp]+((kp==genes_in_pathway.length-1)?"\t":",")); // trans_genes written
 					}						
 				}else {
@@ -542,7 +637,8 @@ public class MainFrame {
 					if(exp_gene_num<=1) exp_gene_num=1;
 					String[] genes_in_pathway=sample_genes_in_pathways(gene_names[k], exp_gene_num);
 					for(int kp=0;kp<genes_in_pathway.length;kp++) {
-						causal_terms_of_this_gene.add(genes_in_pathway[kp]+"_Exp");
+						causal_terms_of_this_gene.add(genes_in_pathway[kp]);
+						//causal_terms_of_this_gene.add(genes_in_pathway[kp]+"_Exp"); Old version that distinguish genetic and expression
 						bw.write(genes_in_pathway[kp]+((kp==genes_in_pathway.length-1)?"\t":",")); // trans expressions written
 					}
 					actual_g_weights[2]=this.gene_contri_weights[2]+(2*this.generator.nextDouble()-1.0)*
@@ -570,7 +666,7 @@ public class MainFrame {
 				for(int w=0;w<actual_g_weights.length;w++)
 					bw.write(actual_g_weights[w]+((w==actual_g_weights.length-1)?"\t":",")); 
 				// Model
-				bw.write(sample_model(this.gene_models)+"\t");
+				bw.write(sample_a_model(this.gene_models)+"\t");
 				// Infinitesimal
 				bw.write("NA\t"); // No Infinitesimal for a gene expression (this column is for traits only).
 				// NoiseVarianceComponent
@@ -578,49 +674,52 @@ public class MainFrame {
 				// Update Causality Graph
 				this.causality_graph.put(gene_names[k], causal_terms_of_this_gene);
 			}
-			// WRITE TRAITS NEXT
+			// ====== WRITE TRAITS NEXT ======
 			for(int t=0;t<this.num_trait_T;t++) {
 				//term ID
 				bw.write(this.trait_names[t]+"\t");
 				ArrayList<String> causal_terms_of_this_trait = new ArrayList<String>();
-				double[] actual_t_weights = new double[this.traits_contri_weights.length]; // [0]=genetics;[1]=gene_exp;[2]=trait. 
+				double[] actual_t_weights = new double[this.traits_contri_weights.length]; // [0]=cis(always Double.NaN) [1]=(trans)genetics;[2]=gene_exp;[3]=trait. 
+				actual_t_weights[0] = Double.NaN; // place holder for the convenience of calculations in public double[][] CausalTerms.combine_arrays_weighted();
 				// there is no cis genetic variants for a term!
 				bw.write("-1\t"); // num_cis is NA
 				// number of genetic variants
-				if(this.generator.nextDouble()<this.traits_contributors[0]) {  // this trait indeed has [0]=genetic contributor(s)
+				if(this.generator.nextDouble()<this.traits_contributors[1]) {  // this trait indeed has [1]=genetic contributor(s)
 					int trans_var_num=(int)(trans_variant_numbers_mean+(2*this.generator.nextDouble()-1.0)*(this.trans_variant_numbers_range));
 					bw.write((trans_var_num>=1?trans_var_num:1)+"\t"); // num_trans written and assign the weight below
-					actual_t_weights[0]=this.traits_contri_weights[0]+(2*this.generator.nextDouble()-1.0)*
-							(this.weights_relative_range * this.traits_contri_weights[0]);
+					actual_t_weights[1]=this.traits_contri_weights[1]+(2*this.generator.nextDouble()-1.0)*
+							(this.weights_relative_range * this.traits_contri_weights[1]);
 				// genes that the above genetic variants will locate. No consideration of pathways
 					int wg_gene_num=(int)(num_contributing_genes_mean+(2*this.generator.nextDouble()-1.0)*(this.num_contributing_genes_range));
 					if(wg_gene_num<=1) wg_gene_num=1;
 					String[] wg_genes_selected=sample_genes(wg_gene_num);
 					for(int kp=0;kp<wg_genes_selected.length;kp++) {
-						causal_terms_of_this_trait.add(wg_genes_selected[kp]+"_Genet");
+						causal_terms_of_this_trait.add(wg_genes_selected[kp]); 
+						//causal_terms_of_this_trait.add(wg_genes_selected[kp]+"_Genet"); Old version that distinguish genetic and expression
 						bw.write(wg_genes_selected[kp]+((kp==wg_genes_selected.length-1)?"\t":",")); // trans_genes written
 					}						
 				}else {
 					bw.write("-1\tNA\t"); // num_trans is NA, so does trans_genes
-					actual_t_weights[0]=Double.NaN;
+					actual_t_weights[1]=Double.NaN;
 				}
 				// gene expressions
-				if(this.generator.nextDouble()<this.traits_contributors[1]) {  // this trait indeed has [1]=gene expression contributor(s)
+				if(this.generator.nextDouble()<this.traits_contributors[2]) {  // this trait indeed has [2]=gene expression contributor(s)
 					int exp_gene_num=(int)(num_contributing_genes_mean+(2*this.generator.nextDouble()-1.0)*(this.num_contributing_genes_range));
 					if(exp_gene_num<=1) exp_gene_num=1;
 					String[] wg_genes_selected=sample_genes(exp_gene_num);
 					for(int kp=0;kp<wg_genes_selected.length;kp++) {
-						causal_terms_of_this_trait.add(wg_genes_selected[kp]+"+Exp");
+						causal_terms_of_this_trait.add(wg_genes_selected[kp]); 
+						//causal_terms_of_this_trait.add(wg_genes_selected[kp]+"_Exp"); Old version that distinguish genetic and expression
 						bw.write(wg_genes_selected[kp]+((kp==wg_genes_selected.length-1)?"\t":",")); // gene expressions written
 					}
-					actual_t_weights[1]=this.traits_contri_weights[1]+(2*this.generator.nextDouble()-1.0)*
-							(this.weights_relative_range*traits_contri_weights[1]);
+					actual_t_weights[2]=this.traits_contri_weights[2]+(2*this.generator.nextDouble()-1.0)*
+							(this.weights_relative_range*traits_contri_weights[2]);
 				}else {
 					bw.write("NA\t"); // trans_exp is NA
-					actual_t_weights[1]=Double.NaN;
+					actual_t_weights[2]=Double.NaN;
 				}
 				// other traits
-				if(this.generator.nextDouble()<this.traits_contributors[2]) {  // this trait indeed has [2]=other traits contributor(s)
+				if(this.generator.nextDouble()<this.traits_contributors[3]) {  // this trait indeed has [3]=other traits contributor(s)
 					int trait_num=(int)(num_contributing_traits_mean+(2*this.generator.nextDouble()-1.0)*(this.num_contributing_traits_range));
 					if(trait_num<=1) trait_num=1;
 					String[] related_traits=sample_traits(trait_num);
@@ -628,19 +727,19 @@ public class MainFrame {
 						causal_terms_of_this_trait.add(related_traits[tp]);
 						bw.write(related_traits[tp]+((tp==related_traits.length-1)?"\t":",")); // traits written
 					}
-					actual_t_weights[2]=this.traits_contri_weights[2]+(2*this.generator.nextDouble()-1.0)*
-							(this.weights_relative_range*traits_contri_weights[2]);
+					actual_t_weights[3]=this.traits_contri_weights[3]+(2*this.generator.nextDouble()-1.0)*
+							(this.weights_relative_range*traits_contri_weights[3]);
 				}else {
 					bw.write("NA\t"); // trait is NA,
-					actual_t_weights[2]=Double.NaN;
+					actual_t_weights[3]=Double.NaN;
 				}	
 				// Weights 
 				for(int w=0;w<actual_t_weights.length;w++)
 					bw.write(actual_t_weights[w]+((w==actual_t_weights.length-1)?"\t":",")); 
 				// Model
-				bw.write(sample_model(this.trait_models)+"\t");
+				bw.write(sample_a_model(this.trait_models)+"\t");
 				// Infinitesimal
-				if(this.generator.nextDouble()<this.traits_contributors[3]) {  // this trait indeed has [3]=infinitesimal contributor(s)
+				if(this.generator.nextDouble()<this.traits_contributors[4]) {  // this trait indeed has [4]=infinitesimal contributor(s)
 					bw.write(this.generator.nextDouble()*(this.traits_var_comp_inf_max-this.traits_var_comp_inf_min)+this.traits_var_comp_inf_min+"\t"); 
 				}else {
 					bw.write("NaN\t"); // Infinitesimal is NaN,
@@ -652,6 +751,8 @@ public class MainFrame {
 			}
 			bw.close();
 		}catch(Exception e) {e.printStackTrace();}
+		System.out.println("Finished generating terms model file.");
+
 	}
 	
 	/*
@@ -732,12 +833,15 @@ public class MainFrame {
 	 * Randomly select from SpecificModels.supported_models={"additive", "epistatic", "compensatory", "heterogenous", "compound"} 
 	 * based on their probabilities in frequency[].
 	 */
-	public String sample_model(double[] frequency) {
+	public String sample_a_model(double[] frequency) {
 		double the_random = this.generator.nextDouble();
 		double sum=0;
 		for(int i=0;i<frequency.length;i++) sum+=frequency[i];
 		if(Double.compare(sum, 1.0)!=0) {
 			System.out.println("Error: Sum of the frequency array not 1.0 in the function String sample_model(double[] frequency)");
+			System.out.print(sum+"; ");
+			for(int i=0;i<frequency.length;i++)System.out.print(frequency[i]+" ");
+			System.out.println();
 			return null;
 		}
 		double current_cut=0.0;
@@ -782,7 +886,9 @@ public class MainFrame {
 	 */
 	
 	public void calculate_correlations() { 
+		System.out.println("Started calculating correlation matrices.");
 		// assign public double[][] corr_KxK;	// correlations between gene expressions
+		System.out.println("Started calculatiing correlation KxK.");
 		this.corr_KxK=new double[this.num_gene_K][]; // a triangle matrix 
 		for(int k1=0; k1<this.num_gene_K; k1++) {
 			this.corr_KxK[k1]=new double[this.num_gene_K-k1];
@@ -791,6 +897,7 @@ public class MainFrame {
 			}
 		}		
 		// assign public double[][] corr_TxT;	// correlations between traits
+		System.out.println("Started calculating correlation TxT.");
 		this.corr_TxT=new double[this.num_trait_T][]; // a triangle matrix 
 		for(int t1=0; t1<this.num_trait_T; t1++) {
 			this.corr_TxT[t1]=new double[this.num_trait_T-t1];
@@ -799,12 +906,14 @@ public class MainFrame {
 			}
 		}	
 		// assign public double[][] corr_TxK;	// correlations between traits and expressions
-		this.corr_TxK=new double[this.num_gene_K][this.num_trait_T];
-		for(int k1=0; k1<this.num_gene_K; k1++) {
-			for(int t1=0; t1<this.num_trait_T; t1++) {
+		System.out.println("Started calculating correlation TxK.");
+		this.corr_TxK=new double[this.num_trait_T][this.num_gene_K];
+		for(int t1=0; t1<this.num_trait_T; t1++) {
+			for(int k1=0; k1<this.num_gene_K; k1++) {
 				this.corr_TxK[t1][k1]=SpecificModels.correlation(this.trait_Y[t1], this.exp_Z[k1]);
 			}
 		}
+		System.out.println("Finished calculating correlation matrices.");
 	}
 	
 	/*
@@ -815,29 +924,35 @@ public class MainFrame {
 		BEFORE adding the noise and infinitesimal terms to reflect genuine correlations 
 	 */
 	public void calculate_associations(CausalTerm[] full_terms) {
+		System.out.println("Started calculating association matrices.");
+		System.out.println("Started calculating association Kxm.");
 		this.asso_Kxm= new double[this.num_gene_K][]; // the length of each asso_KxM[k] is different, which is the number of genetic variants contributing to the expression
 		for(int k=0;k<this.num_gene_K;k++) { 
 			double[] exp_value=this.exp_Z[k];
-			int m=this.gene2selected_loc.size();
+			int m=this.gene2selected_loc.get(this.gene_names[k]).length;
 			this.asso_Kxm[k]= new double[m];
 			double[][] genotype_values=this.gene2selected_var.get(this.gene_names[k]);
 			for(int m_index=0;m_index<m;m_index++) {
-				this.asso_Kxm[k][m_index]=SpecificModels.correlation(exp_value, genotype_values[m_index]);
+				this.asso_Kxm[k][m_index]=
+						SpecificModels.correlation(exp_value, genotype_values[m_index]);
 			}
 		}
-		this.asso_Txm=new double[this.num_trait_T][]; // the length of each asso_KxM[k] is different, which is the number of genetic variants contributing to the trait
+		System.out.println("Started calculating association Txm.");
+		this.asso_Txm=new double[this.num_trait_T][]; // the length of each asso_TxM[k] is different, which is the number of genetic variants contributing to the trait
 		for(int t=0;t<this.num_trait_T;t++) {
 			double[] trait_value=this.trait_Y[t];
-			int m=this.trait2selected_loc.size();
+			int m=this.trait2selected_loc.get(this.trait_names[t]).length;
 			this.asso_Txm[t]= new double[m];
 			double[][] genotype_values=this.trait2selected_var.get(this.trait_names[t]);
 			for(int m_index=0;m_index<m;m_index++) {
-				this.asso_Kxm[t][m_index]=SpecificModels.correlation(trait_value, genotype_values[m_index]);
+				this.asso_Txm[t][m_index]=SpecificModels.correlation(trait_value, genotype_values[m_index]);
 			}
 		}
+		System.out.println("Finished calculating association matrices.");
+
 	}
 	/*
-	 * Output generated data to files! TODO
+	 * Output generated data to files! 
 	 * the following data will be written to files:
 	 * 1. Expression and trait files 
 	 * 2. Correlation files
@@ -856,6 +971,7 @@ public class MainFrame {
 				bw.write("\n");
 			}
 			bw.close();
+			System.out.println("Finished outputing expression data.");
 			// Trait file
 			bw=new BufferedWriter(new FileWriter(output_file_folder+"/traits.csv"));
 			bw.write("#Trait_ID");
@@ -867,6 +983,7 @@ public class MainFrame {
 				bw.write("\n");
 			}
 			bw.close();
+			System.out.println("Finished outputing trait data.");
 			// Correlation files
 			// expression by expression 
 			bw=new BufferedWriter(new FileWriter(output_file_folder+"/corr_exp_by_exp.csv"));
@@ -881,6 +998,7 @@ public class MainFrame {
 				}bw.write("\n");
 			}	
 			bw.close();
+			System.out.println("Finished outputing corr_exp_by_exp data.");
 			// trait by trait 
 			bw=new BufferedWriter(new FileWriter(output_file_folder+"/corr_trait_by_trait.csv"));
 			bw.write("#Trait_ID");
@@ -894,6 +1012,7 @@ public class MainFrame {
 				}bw.write("\n");
 			}	
 			bw.close();
+			System.out.println("Finished outputing corr_trait_by_trait data.");
 			// trait by expression 
 			bw=new BufferedWriter(new FileWriter(output_file_folder+"/corr_trait_by_exp.csv"));
 			bw.write("#Gene_ID");
@@ -906,12 +1025,13 @@ public class MainFrame {
 				}bw.write("\n");
 			}
 			bw.close();
+			System.out.println("Finished outputing corr_trait_by_exp data.");
 			// expression by genotype
 			bw=new BufferedWriter(new FileWriter(output_file_folder+"/asso_exp_by_genotype.csv"));
 			bw.write("#Gene_ID,Genotype_chr_loc,correlation\n");
 			for(int k=0; k<this.num_gene_K; k++) {
 				bw.write(this.gene_names[k]);
-				int m = this.gene2selected_loc.size(); // number of genotype sites with genuine association
+				int m = this.gene2selected_loc.get(this.gene_names[k]).length; // number of genotype sites with genuine association
 				String[] loc_strings_this_gene=this.gene2selected_loc.get(this.gene_names[k]);
 				for(int m_index=0;m_index<m;m_index++) {
 					String[] locs_string=loc_strings_this_gene[m_index].split("_");
@@ -923,13 +1043,14 @@ public class MainFrame {
 				}bw.write("\n");
 			}
 			bw.close();
+			System.out.println("Finished outputing asso_exp_by_genotype data.");
 			// trait by genotype
 			bw=new BufferedWriter(new FileWriter(output_file_folder+"/asso_trait_by_genotype.csv"));
 			bw.write("#Trait_ID,Genotype_chr_loc,correlation\n");
 			for(int t=0; t<this.num_trait_T; t++) {
 				bw.write(this.trait_names[t]);
-				int m = this.trait2selected_loc.size(); // number of genotype sites with genuine association
-				String[] loc_strings_this_gene=this.gene2selected_loc.get(this.trait_names[t]);
+				int m = this.trait2selected_loc.get(this.trait_names[t]).length; // number of genotype sites with genuine association
+				String[] loc_strings_this_gene=this.trait2selected_loc.get(this.trait_names[t]);
 				for(int m_index=0;m_index<m;m_index++) {
 					String[] locs_string=loc_strings_this_gene[m_index].split("_");
 					int chr_index=Integer.parseInt(locs_string[0]);
@@ -940,6 +1061,7 @@ public class MainFrame {
 				}bw.write("\n");
 			}
 			bw.close();
+			System.out.println("Finished outputing asso_trait_by_genotype data.");
 			// Causality graph
 			bw=new BufferedWriter(new FileWriter(output_file_folder+"/causality_graph.csv"));
 			bw.write("#Target,Sources\n");
@@ -960,7 +1082,7 @@ public class MainFrame {
 				bw.write("\n");
 			}
 			bw.close();
-			
+			System.out.println("Finished outputing causality_graph data.");
 			
 //			BufferedWriter bw=new BufferedWriter(new FileWriter(""));
 //			bw.write("#gene_contri_weights={");

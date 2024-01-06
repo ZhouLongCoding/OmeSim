@@ -83,7 +83,8 @@ public class CausalTerm {
 		for(int t=0;t<weights_string.length;t++) 
 			this.weights[t]=Double.parseDouble(weights_string[t]);
 		this.model=info[7];
-		this.infinitesimal_vc_value=Double.parseDouble(info[8]);
+		 // only traits have infinitesimal_vc_value, expressions don't.
+		this.infinitesimal_vc_value=isTrait(this.ID,main_frame)?Double.parseDouble(info[8]):Double.NaN;
 		this.noise_vc_value=Double.parseDouble(info[9]);
 		// extract genotype data from main_frame.geno_G, 
 		this.sample_geno_vars_in_genes_(main_frame);
@@ -214,8 +215,8 @@ public class CausalTerm {
 				String[] locs_in_the_gene=main_frame.gene2filtered_cis_loc.get(this.ID);
 				for(int m_cis=0;m_cis<this.num_cis;m_cis++) {								
 					int var_index=main_frame.generator.nextInt(vars_in_the_gene.length);
-					this.geno_G_trans_var[m_cis]=vars_in_the_gene[var_index];
-					this.geno_G_trans_loc[m_cis]=locs_in_the_gene[var_index];
+					this.geno_G_cis_var[m_cis]=vars_in_the_gene[var_index];
+					this.geno_G_cis_loc[m_cis]=locs_in_the_gene[var_index];
 				}
 			}
 		}
@@ -278,10 +279,10 @@ public class CausalTerm {
 			}
 		}else if(isGene(term_names[0], main_frame)){  //  term_names are genes
 			this.exp_Z_val=new double[term_names.length][];
-			for(int t=0;t<term_names.length;t++) {
-				int t_index=main_frame.gene_names2index.get(term_names[t]);
-				this.exp_Z_val[t]=main_frame.exp_Z[t_index];
-				if(!main_frame.gene_exp_finalized[t_index]) finalized = false;
+			for(int k=0;k<term_names.length;k++) {
+				int k_index=main_frame.gene_names2index.get(term_names[k]);
+				this.exp_Z_val[k]=main_frame.exp_Z[k_index];
+				if(!main_frame.gene_exp_finalized[k_index]) finalized = false;
 			}
 		}
 		return finalized;
@@ -293,16 +294,20 @@ public class CausalTerm {
 	 * Calculate correlation matrices BEFORE adding noise term and infinitesmal term. (the "gold-standard" relationship).
 	 */
 	public static void calculate_all_value(MainFrame main_frame, CausalTerm[] full_terms) {
+		System.out.println("Started to iteratively calculating terms");
 		// iteratively calculate the raw values of terms 
 		for(int r=0;r<main_frame.iteration_rounds;r++) {
+			System.out.println("===== Round "+r+" =====");
 			for(int t_index=0;t_index<full_terms.length;t_index++) {
 				if(isGene(full_terms[t_index].ID, main_frame) && 
 						!main_frame.gene_exp_finalized[main_frame.gene_names2index.get(full_terms[t_index].ID)]) {
 					full_terms[t_index].calculate_this_ID(main_frame);
+					System.out.println("---- Gene "+full_terms[t_index].ID+" done ----");
 				}
 				if(isTrait(full_terms[t_index].ID, main_frame) && 
-						!main_frame.trait_finalized[main_frame.gene_names2index.get(full_terms[t_index].ID)]) {
+						!main_frame.trait_finalized[main_frame.trait_names2index.get(full_terms[t_index].ID)]) {
 					full_terms[t_index].calculate_this_ID(main_frame);
+					System.out.println("---- Trait "+full_terms[t_index].ID+" done ----");
 				}
 			}
 			int genes_finalized=0, traits_finalized=0;
@@ -330,7 +335,8 @@ public class CausalTerm {
 				main_frame.trait_Y[focal_term_index]=SpecificModels.add_inf_noise_bin(
 						main_frame.trait_Y[focal_term_index], main_frame, full_terms[t_index]);
 			}			
-		}		
+		}
+		System.out.println("Finished calculating terms");
 	}
 	
 	
@@ -376,7 +382,13 @@ public class CausalTerm {
 			if(initialized[t]) {
 				for(int k_t=0;k_t<all_data[t].length;k_t++) { // k_t is the index of terms within all_data[t]
 					for(int i=0;i<sample_size;i++) {
-						X[i][total_term_index]=all_data[t][k_t][i]*this.weights[t];  // weights of the terms are included here
+						X[i]
+								[total_term_index]=
+								all_data
+								[t]
+										[k_t]
+												[i]*
+												this.weights[t];  // weights of the terms are included here
 					}	
 					total_term_index++;
 				}
