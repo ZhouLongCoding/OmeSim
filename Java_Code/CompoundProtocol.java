@@ -27,8 +27,8 @@ import java.util.Random;
  */
 public class CompoundProtocol {
 	
-	public static final String[] all_models= {"additive", "epistatic", "compensatory", "heterogenous"};
-	public static final String[] nonlinear_models= {"epistatic", "compensatory", "heterogenous"};
+	public static final String[] all_models= {SpecificModels._additive, SpecificModels._epistatic, SpecificModels._compensatory, SpecificModels._heterogenous};
+	public static final String[] nonlinear_models= {SpecificModels._epistatic, SpecificModels._compensatory, SpecificModels._heterogenous};
 	
 	public static final int random_seed =1;
 	public static final Random generator = new Random(random_seed);

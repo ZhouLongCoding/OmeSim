@@ -6,6 +6,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 
 /*
  * Structure of the list of terms contributing to a trait or omics. 
@@ -184,6 +185,9 @@ public class CausalTerm {
 			main_frame.trait_Y[focal_term_index]=SpecificModels.response(this.model, combined_X, SpecificModels.default_weight);
 			main_frame.trait_finalized[focal_term_index]= (exps_finalized && traits_finalized); // it is finalized if all depending terms are
 		}else {  // must be a gene
+			if(this.ID.equals("RAB3B")) {
+				System.out.println("Let us debug");
+			}
 			int focal_term_index=main_frame.gene_names2index.get(this.ID);
 			main_frame.exp_Z[focal_term_index]=SpecificModels.response(this.model, combined_X, SpecificModels.default_weight);
 			main_frame.gene_exp_finalized[focal_term_index]= (exps_finalized && traits_finalized); // it is finalized if all depending terms are
@@ -196,8 +200,7 @@ public class CausalTerm {
 	 * Particularly: main_frame.gene2filtered_cis_var maps gene_names to cis-variants of genes
 	 * then randomly sample num_vars variants from these genes. 
 	 * 
-	 * Note that this method covers both cis and trans variants sampling. In case of cis,
-	 * just pass only one gene (i.e., {itself}) to gene_names.  
+	 * Note that this method covers both cis and trans variants sampling. 
 	 * 
 	 * A problem might be that the variants are NOT sampled proportional to the gene length, which is unfair for large genes. 
 	 * A FUTURE development may make it more "fair" by giving more weights to larger genes.
@@ -221,19 +224,33 @@ public class CausalTerm {
 			}
 		}
 		// trans genetic variants 
+		// ensure every gene has at least one variant. 
 		if(this.num_trans!=-1) {
 			//  this.geno_G_trans_var=this.sample_geno_vars_in_genes(this.trans_var_genes, this.num_trans, main_frame);
 			this.geno_G_trans_var=new double[this.num_trans][];
 			this.geno_G_trans_loc=new String[this.num_trans]; 
 			// distribute num_vars variants into genes in gene_names[]. the all genes get an equal share!
-			for(int m_trans=0;m_trans<this.num_trans;m_trans++) {
-				int gene_index=main_frame.generator.nextInt(this.trans_var_genes.length); // sample a genetic variant from this gene
-				double[][] vars_in_a_gene=main_frame.gene2filtered_cis_var.get(trans_var_genes[gene_index]);
-				String[] locs_in_a_gene=main_frame.gene2filtered_cis_loc.get(trans_var_genes[gene_index]);
+			if(this.num_trans<this.trans_var_genes.length) {
+				System.out.println("EOORR: "+this.ID+":num_trans<this.trans_var_genes.length.");
+			}
+			for(int m_trans=0; m_trans<this.trans_var_genes.length;m_trans++) {
+				// process each gene sequentially so that each gene has at least a trans-variant. 
+				double[][] vars_in_a_gene=main_frame.gene2filtered_cis_var.get(trans_var_genes[m_trans]);
+				String[] locs_in_a_gene=main_frame.gene2filtered_cis_loc.get(trans_var_genes[m_trans]);
 				int var_index=main_frame.generator.nextInt(vars_in_a_gene.length);
 				this.geno_G_trans_var[m_trans]=vars_in_a_gene[var_index];
 				this.geno_G_trans_loc[m_trans]=locs_in_a_gene[var_index];
-			}		
+			}
+			if(this.num_trans>this.trans_var_genes.length) { // more variants remained after assigning each gene a variant
+				for(int m_trans=this.trans_var_genes.length;m_trans<this.num_trans;m_trans++) {
+					int gene_index=main_frame.generator.nextInt(this.trans_var_genes.length); // sample a genetic variant from this gene
+					double[][] vars_in_a_gene=main_frame.gene2filtered_cis_var.get(trans_var_genes[gene_index]);
+					String[] locs_in_a_gene=main_frame.gene2filtered_cis_loc.get(trans_var_genes[gene_index]);
+					int var_index=main_frame.generator.nextInt(vars_in_a_gene.length);
+					this.geno_G_trans_var[m_trans]=vars_in_a_gene[var_index];
+					this.geno_G_trans_loc[m_trans]=locs_in_a_gene[var_index];
+				}	
+			}
 		}
 	}
 	
@@ -302,12 +319,12 @@ public class CausalTerm {
 				if(isGene(full_terms[t_index].ID, main_frame) && 
 						!main_frame.gene_exp_finalized[main_frame.gene_names2index.get(full_terms[t_index].ID)]) {
 					full_terms[t_index].calculate_this_ID(main_frame);
-					System.out.println("---- Gene "+full_terms[t_index].ID+" done ----");
+					//System.out.println("---- Gene "+full_terms[t_index].ID+" done ----");
 				}
 				if(isTrait(full_terms[t_index].ID, main_frame) && 
 						!main_frame.trait_finalized[main_frame.trait_names2index.get(full_terms[t_index].ID)]) {
 					full_terms[t_index].calculate_this_ID(main_frame);
-					System.out.println("---- Trait "+full_terms[t_index].ID+" done ----");
+					//System.out.println("---- Trait "+full_terms[t_index].ID+" done ----");
 				}
 			}
 			int genes_finalized=0, traits_finalized=0;
@@ -355,7 +372,7 @@ public class CausalTerm {
 	public double[][] combine_arrays_weighted(){		
 		//sum up the number of terms and check if the sample sizes are consistent in multiple data arrays
 		int num_var=0;
-		int sample_size=-1;
+		int sample_size=-1;  // -1 indicates it is not assigned yet. Will be checked later.
 		boolean[] initialized = new boolean[4]; // recording if the related array has been initialized
 		// putting all data together for the convenience of extraction based on the initialized[]
 		double[][][] all_data= new double[4][][]; 
@@ -382,13 +399,8 @@ public class CausalTerm {
 			if(initialized[t]) {
 				for(int k_t=0;k_t<all_data[t].length;k_t++) { // k_t is the index of terms within all_data[t]
 					for(int i=0;i<sample_size;i++) {
-						X[i]
-								[total_term_index]=
-								all_data
-								[t]
-										[k_t]
-												[i]*
-												this.weights[t];  // weights of the terms are included here
+						X[i][total_term_index]=
+								all_data[t][k_t][i]*this.weights[t];  // weights of the terms are included here
 					}	
 					total_term_index++;
 				}
@@ -403,6 +415,139 @@ public class CausalTerm {
 	
 	public static boolean isGene(String ID, MainFrame main_frame) {
 		return main_frame.gene_names2index.containsKey(ID);
+	}
+	
+	/*
+	 * The randomly generated causal_terms may have too many terms for interaction model, 
+	 * leading to the calculated responses to be a vector of the same value (-1 or +1). 
+	 * 
+	 * In this function, we reduce the number of terms into just 2, retaining one genetic 
+	 * variant, and one exp/trait. The rule is:
+	 * 
+	 * Gene expressions:
+	 * 0. Note that all expressions must have cis-regulatory geneitc effects. 
+	 * 1. Only cis genetics: retain two cis variants
+	 * 2. Has trans genetics: retain 1 cis and 1 trans
+	 * 3. No trans genetics, has other-exp: retain 1 cis and 1 exp
+	 * 4. No trans genetics, no other-exp, has traits, retain 1 cis and 1 trait.
+	 * 
+	 * Traits:
+	 * 0. Note that all traits must have genetic effects.
+	 * 1. Only genetics: retain two genetic variants
+	 * 2. Has exp: retain 1 genetic and 1 exp
+	 * 3. No exp: has trait, retain 1 genetic and 1 trait 
+	 */
+	public static void adjust_causal_terms(String in_causal_file, String out_causal_file, MainFrame main_frame) {
+		try {
+			BufferedReader br= new BufferedReader(new FileReader(in_causal_file));
+			BufferedWriter bw=new BufferedWriter(new FileWriter(out_causal_file));
+			String line=br.readLine();
+			while(line.startsWith("##")) { // parameter lines
+				bw.write(line+"\n");
+				line=br.readLine();
+			}
+			bw.write("## Adjusted from"+ in_causal_file +" to ensure there are two terms for interaction models.\n");
+			bw.write(line+"\n"); // the header line for labels of terms
+			line=br.readLine();  // the data line starts here
+			// [0]term_ID [1]num_cis [2]num_trans [3]trans_genes [4]trans_exp [5]traits [6]Weights [7]Model [8]Infinitesimal [9]NoiseVarianceComponent
+			// Note that [6]Weights are unchanged so that some missing terms won't have NaN weights, which won't hurt the actual calculation 
+			while(line!=null) {
+				String[] terms=line.split("\t");
+				if(terms[7].equals(SpecificModels._epistatic)||terms[7].equals(SpecificModels._compensatory)
+						||terms[7].equals(SpecificModels._heterogenous)) { // an interaction model that operates on two terms only 
+					if(isGene(terms[0], main_frame)) {
+						if(terms[2].equals("-1") && terms[4].equals("NA") && terms[5].equals("NA")) { // cis-genetics only
+							// reset cis-genetics to exactly 2 variants. 
+							bw.write(terms[0]+"\t"+"2");  
+							for(int t=2;t<terms.length;t++) bw.write("\t"+terms[t]);
+							bw.write("\n");
+							// no adjustment on main_frame.causality_graph
+						}else if(!terms[2].equals("-1")) { // has trans-genetics
+							// reset cis and trans-genetics both to exactly 1 variant.
+							String trans_gene=terms[3].split(",")[0];
+							bw.write(terms[0]+"\t1\t1\t"+trans_gene+"\tNA\tNA"); 
+							for(int t=6;t<terms.length;t++) bw.write("\t"+terms[t]);
+							bw.write("\n");
+							// adjust main_frame.causality_graph
+							ArrayList<String> new_causal_terms=new ArrayList<String>();
+							new_causal_terms.add(trans_gene);
+							main_frame.causality_graph.put(terms[0], new_causal_terms);
+						}else if(!terms[4].equals("NA")) { // no trans-genetics, but has other expressions
+							// reset cis and other-exp both to exactly 1 variant/gene-exp.
+							String trans_exp=terms[4].split(",")[0];
+							bw.write(terms[0]+"\t1\t-1\tNA\t"+trans_exp+"\tNA"); 
+							for(int t=6;t<terms.length;t++) bw.write("\t"+terms[t]);
+							bw.write("\n");
+							// adjust main_frame.causality_graph
+							ArrayList<String> new_causal_terms=new ArrayList<String>();
+							new_causal_terms.add(trans_exp);
+							main_frame.causality_graph.put(terms[0], new_causal_terms);
+						}else if(!terms[5].equals("NA")) { // no trans-genetics, no other expressions, but has traits
+							// reset cis and traits both to exactly 1 variant/trait.
+							String trait=terms[5].split(",")[0];
+							bw.write(terms[0]+"\t1\t-1\tNA\tNA\t"+trait); 
+							for(int t=6;t<terms.length;t++) bw.write("\t"+terms[t]);
+							bw.write("\n");
+							// adjust main_frame.causality_graph
+							ArrayList<String> new_causal_terms=new ArrayList<String>();
+							new_causal_terms.add(trait);
+							main_frame.causality_graph.put(terms[0], new_causal_terms);
+						}else {
+							System.out.println("Warning: CausalTerm.adjust_causal_terms(): The inut line has logic problem. "
+									+ "Skipped this line during the adjustment.");
+							System.out.println(line);
+						}
+					}else if(isTrait(terms[0], main_frame)) {
+						if(terms[4].equals("NA") && terms[5].equals("NA")) { // genetics only
+							// reset genetics to exactly 2 variants.  
+							bw.write(terms[0]+"\t-1\t"+"2");
+							String[] genet_genes=terms[3].split(",");
+							// take the first 1 or 2 genes
+							bw.write("\t"+((genet_genes.length==1)?(genet_genes[0]):(genet_genes[0]+","+genet_genes[1])));
+							for(int t=4;t<terms.length;t++) bw.write("\t"+terms[t]);
+							bw.write("\n");
+							// adjust main_frame.causality_graph
+							ArrayList<String> new_causal_terms=new ArrayList<String>();
+							new_causal_terms.add(genet_genes[0]);
+							if(genet_genes.length>1) new_causal_terms.add(genet_genes[1]);
+							main_frame.causality_graph.put(terms[0], new_causal_terms);
+						}else if(!terms[4].equals("NA")) { // has other expressions
+							// reset genetics and other-exp both to exactly 1 variant/gene-exp.
+							String genetics=terms[3].split(",")[0];
+							String gene_exp=terms[4].split(",")[0];
+							bw.write(terms[0]+"\t-1\t1\t"+genetics+"\t"+gene_exp+"\tNA"); 
+							for(int t=6;t<terms.length;t++) bw.write("\t"+terms[t]);
+							bw.write("\n");
+							// adjust main_frame.causality_graph
+							ArrayList<String> new_causal_terms=new ArrayList<String>();
+							new_causal_terms.add(genetics);
+							new_causal_terms.add(gene_exp);
+							main_frame.causality_graph.put(terms[0], new_causal_terms);
+						}else if(!terms[5].equals("NA")) { // no other expressions, but has traits
+							// reset genetics and other-traits both to exactly 1 variant/trait.
+							String genetics=terms[3].split(",")[0];
+							String other_trait=terms[5].split(",")[0];
+							bw.write(terms[0]+"\t-1\t1\t"+genetics+"\tNA\t"+other_trait); 
+							for(int t=6;t<terms.length;t++) bw.write("\t"+terms[t]);
+							bw.write("\n");
+							// adjust main_frame.causality_graph
+							ArrayList<String> new_causal_terms=new ArrayList<String>();
+							new_causal_terms.add(genetics);
+							new_causal_terms.add(other_trait);
+							main_frame.causality_graph.put(terms[0], new_causal_terms);
+						}else {
+							System.out.println("Warning: CausalTerm.adjust_causal_terms(): The inut line has logic problem. "
+									+ "Skipped this line during the adjustment.");
+							System.out.println(line);
+						}
+					}
+				}else {
+					bw.write(line+"\n");
+				}
+				line=br.readLine();
+			}
+			br.close();bw.close();
+		}catch (Exception e) {e.printStackTrace();}
 	}
 	
 //	/*

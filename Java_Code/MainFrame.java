@@ -21,6 +21,7 @@ import java.util.Random;
  */
 public class MainFrame {
 	
+	public static final double MUST_HAVE=1.0; 
 	public static final int random_seed =1;
 	public final Random generator = new Random(MainFrame.random_seed);
 	
@@ -42,8 +43,9 @@ public class MainFrame {
 	
 	// GENETIC ARCHITECTURE & MODEL (all parameters are general proportions to guide the random assignment of terms)
 	// based on the probabilities of contributors below, each gene/trait will be randomly decided on whether it contains corresponding contributors 
-	public double[] gene_contributors= {1.0, 0.5, 0.3, 0};  // proportion of gene expressions that have the contribution from [0]=cis;[1]=trans;[2]=other_gene_exp;[3]=trait.  
-	public double[] traits_contributors={Double.NaN, 1.0, 0.8, 0.5, 0.3};  //proportion of traits that have the contribution from [0]=cis;[1]=genetics;[2]=gene_exp;[3]=trait,[4]=infinitesimal.
+	public double[] gene_contributors= {MainFrame.MUST_HAVE, 0.5, 0.3, 0.1};  // proportion of gene expressions that have the contribution from [0]=cis;[1]=trans;[2]=other_gene_exp;[3]=trait.  
+	public double[] traits_contributors={Double.NaN, MainFrame.MUST_HAVE, 0.8, 0.5, 0.3};  //proportion of traits that have the contribution from [0]=cis;[1]=genetics;[2]=gene_exp;[3]=trait,[4]=infinitesimal.
+										//Note that [static & final] MUST_HAVE==1.0, mandating that expressions always have cis-genetics and traits always have genetics. 
 	// parameters to guide percentage of contributions 
 	public double[] gene_contri_weights= {1.0, 0.5, 4.0, 2.0};  // weights of gene-contributors from [0]=cis;[1]=trans;[2]=other_gene_exp;[3]=trait.  
 	public double[] traits_contri_weights={Double.NaN, 1.0, 4.0, 2.0};  // weights of trait-contributors from [0]=cis;[1]=trans; [2]=gene_exp;[3]=trait;
@@ -78,7 +80,7 @@ public class MainFrame {
 	public int num_subj_N;		// #subjects, or sample size, N. 
 	public String[] subj_names;	// names of all subjects
 	// traits related
-	public int num_trait_T=30;		// #traits T default = 30
+	public int num_trait_T=1000;		// #traits T default = 30
 	public String[] trait_names;// in the format of T_ID;
 	public HashMap<String, Integer> trait_names2index = new HashMap<String, Integer>();
 	public boolean[] trait_finalized;  // finalized means no dependence on other terms that are not finalized. 
@@ -148,6 +150,8 @@ public class MainFrame {
 		// assign genotype matrix this.geno_G based on filters of MAF and location_distance. 
 		// supporting three file types VCF, CSV, and PLINK (tped)
 		this.readin_genotype_with_maf_ld_filters();
+		// standardize genotype
+		this.standardize_genotype();
 		// read in gene information. 
 		// Note that it relies on the this.readin_genotype_with_maf_ld_filters() to set up chr2index 
 		this.read_in_genes_locs();
@@ -334,6 +338,17 @@ public class MainFrame {
 		System.out.println("Finished reading genotype file.");
 	}
 	
+	/*
+	 * For each vector of genotype at one site, X = (X -mean(X))/Sqrt(Var(X)) 
+	 */
+	public void standardize_genotype() {
+		for(int c=0;c<this.num_chr;c++) {
+			for(int g=0;g<this.geno_G[c].length;g++) {
+				SpecificModels.standardization_with_weight(this.geno_G[c][g],1.0);
+			}
+		}
+		System.out.println("Genotype matrix standardized.");
+	}
 	/*
 	 * Assuming an 0,1,2 coding of genotype, calculate minor allele frequency. 
 	 */
@@ -545,6 +560,9 @@ public class MainFrame {
 			this.arch_detailed_file 
 		as well as the causality graph corresponding to the arch_detailed_file to the graph: 	
 			public HashMap<String, ArrayList<String>> causality_graph;
+			
+		It first generate the terms randomly; and then use CausalTerm.adjust_causal_terms() to
+		adjust terms with interaction model to two factors only. 
 	 */
 	public void set_terms_model() {
 		System.out.println("Started generating terms model file.");
@@ -557,7 +575,10 @@ public class MainFrame {
 			this.trait_names2index.put(this.trait_names[t], t);
 		}
 		try{
-			BufferedWriter bw=new BufferedWriter(new FileWriter(this.arch_detailed_file));
+			// write to .tmp file first before running the CausalTerm.adjust_causal_terms().
+	
+			BufferedWriter bw=new BufferedWriter(new FileWriter(this.arch_detailed_file+".tmp"));
+			// BufferedWriter bw=new BufferedWriter(new FileWriter(this.arch_detailed_file));
 			// write parameters used for generating this file to the headers.
 			bw.write("##genotype_file="+this.genotype_file+"\n");
 			bw.write("##genes_file="+this.genes_file+"\n");
@@ -614,13 +635,15 @@ public class MainFrame {
 				}
 				// number of trans genetic variants
 				if(this.generator.nextDouble()<this.gene_contributors[1]) {  // this gene indeed has [1]=trans contributor(s)
-					int trans_var_num=(int)(trans_variant_numbers_mean+(2*this.generator.nextDouble()-1.0)*(this.trans_variant_numbers_range));
-					bw.write((trans_var_num>=1?trans_var_num:1)+"\t"); // num_trans written and assign the weight below
+					int raw_trans_var_num=(int)(trans_variant_numbers_mean+(2*this.generator.nextDouble()-1.0)*(this.trans_variant_numbers_range));
+					int trans_var_num=raw_trans_var_num>=1?raw_trans_var_num:1;
+					bw.write(trans_var_num+"\t"); // num_trans written and assign the weight below
 					actual_g_weights[1]=this.gene_contri_weights[1]+(2*this.generator.nextDouble()-1.0)*
 							(this.weights_relative_range*gene_contri_weights[1]);
 				// genes that the above trans genetic variants will locate. Priority is given to the genes in the same pathway of the focal gene
 					int trans_gene_num=(int)(num_contributing_genes_mean+(2*this.generator.nextDouble()-1.0)*(this.num_contributing_genes_range));
 					if(trans_gene_num<=1) trans_gene_num=1;
+					if(trans_gene_num>trans_var_num) trans_gene_num=trans_var_num; // #genes must not be larger than their #variants, ensuring each gene has at least a variant.
 					String[] genes_in_pathway=sample_genes_in_pathways(gene_names[k], trans_gene_num);
 					for(int kp=0;kp<genes_in_pathway.length;kp++) {
 						causal_terms_of_this_gene.add(genes_in_pathway[kp]);
@@ -685,13 +708,15 @@ public class MainFrame {
 				bw.write("-1\t"); // num_cis is NA
 				// number of genetic variants
 				if(this.generator.nextDouble()<this.traits_contributors[1]) {  // this trait indeed has [1]=genetic contributor(s)
-					int trans_var_num=(int)(trans_variant_numbers_mean+(2*this.generator.nextDouble()-1.0)*(this.trans_variant_numbers_range));
-					bw.write((trans_var_num>=1?trans_var_num:1)+"\t"); // num_trans written and assign the weight below
+					int raw_trans_var_num=(int)(trans_variant_numbers_mean+(2*this.generator.nextDouble()-1.0)*(this.trans_variant_numbers_range));
+					int trans_var_num=raw_trans_var_num>=1?raw_trans_var_num:1;
+					bw.write(trans_var_num+"\t"); // num_trans written and assign the weight below
 					actual_t_weights[1]=this.traits_contri_weights[1]+(2*this.generator.nextDouble()-1.0)*
 							(this.weights_relative_range * this.traits_contri_weights[1]);
 				// genes that the above genetic variants will locate. No consideration of pathways
 					int wg_gene_num=(int)(num_contributing_genes_mean+(2*this.generator.nextDouble()-1.0)*(this.num_contributing_genes_range));
 					if(wg_gene_num<=1) wg_gene_num=1;
+					if(wg_gene_num>trans_var_num) wg_gene_num=trans_var_num;//#genes must not be larger than their #variants, ensuring each gene has at least a variant.
 					String[] wg_genes_selected=sample_genes(wg_gene_num);
 					for(int kp=0;kp<wg_genes_selected.length;kp++) {
 						causal_terms_of_this_trait.add(wg_genes_selected[kp]); 
@@ -722,7 +747,7 @@ public class MainFrame {
 				if(this.generator.nextDouble()<this.traits_contributors[3]) {  // this trait indeed has [3]=other traits contributor(s)
 					int trait_num=(int)(num_contributing_traits_mean+(2*this.generator.nextDouble()-1.0)*(this.num_contributing_traits_range));
 					if(trait_num<=1) trait_num=1;
-					String[] related_traits=sample_traits(trait_num);
+					String[] related_traits=sample_traits(this.trait_names[t], trait_num);
 					for(int tp=0;tp<related_traits.length;tp++) {
 						causal_terms_of_this_trait.add(related_traits[tp]);
 						bw.write(related_traits[tp]+((tp==related_traits.length-1)?"\t":",")); // traits written
@@ -751,8 +776,11 @@ public class MainFrame {
 			}
 			bw.close();
 		}catch(Exception e) {e.printStackTrace();}
-		System.out.println("Finished generating terms model file.");
-
+		System.out.println("Finished generating terms model file randomly.");
+		
+		//Adjust the number of terms for two-way interaction models to exactly 2. 
+		CausalTerm.adjust_causal_terms(this.arch_detailed_file+".tmp", this.arch_detailed_file, this);
+		System.out.println("Finished adjusting terms model file for two-way interactions. (The Causality Graph has been updated accordingly.)");
 	}
 	
 	/*
@@ -769,10 +797,14 @@ public class MainFrame {
 			for(int i=0;i<pathways.size();i++) { // take the first few pathways until the total number of genes are higher than twice of the num_genes_needed
 				if(genes_in_pathways.size()<min_candidates) {
 					String[] the_genes=this.pathways2genes.get(pathways.get(i));
-					for(int k=0;k<the_genes.length;k++) genes_in_pathways.add(the_genes[k]);
+					for(int k=0;k<the_genes.length;k++) {
+						if(!the_genes[k].equals(the_gene_name)) { // add all (but itself) into the collection of candidate genes.
+							genes_in_pathways.add(the_genes[k]);
+						}
+					}
 				}else break;
 			}
-			if(genes_in_pathways.size()<=num_genes_needed) { // no enough candidates, just return all of them
+			if(genes_in_pathways.size()<=num_genes_needed) { // no enough candidates, just return all of them (except for the_gene_name itself)
 				return genes_in_pathways.toArray(new String[genes_in_pathways.size()]);
 			}else { // more candidates than num_genes_needed. So select randomly.
 				String[] selected_genes=new String[num_genes_needed];
@@ -810,9 +842,30 @@ public class MainFrame {
 	 */
 	public String[] sample_traits(int number_traits_needed) {
 		String[] selected=new String[number_traits_needed];
+		HashSet<String> already_selected=new HashSet<String>();
 		for(int t=0;t<number_traits_needed;t++) {
-			selected[t]=this.trait_names[this.generator.nextInt(this.num_trait_T)];
-			// could select the same trait twice, which is OK.
+			String a_trait=this.trait_names[this.generator.nextInt(this.num_trait_T)];
+			while(already_selected.contains(a_trait))
+				a_trait=this.trait_names[this.generator.nextInt(this.num_trait_T)];
+			selected[t]=a_trait;
+			already_selected.add(a_trait);
+		}
+		return selected;
+	}
+	
+	/*
+	 * Randomly select several traits from this.trait_names[].
+	 * Additionally, ensure the traits are not the same as the targeting trait itself. 
+	 */
+	public String[] sample_traits(String the_trait_itself, int number_traits_needed) {
+		String[] selected=new String[number_traits_needed];
+		HashSet<String> already_selected=new HashSet<String>();
+		for(int t=0;t<number_traits_needed;t++) {
+			String a_trait=this.trait_names[this.generator.nextInt(this.num_trait_T)];
+			while(a_trait.equals(the_trait_itself) || already_selected.contains(a_trait))
+				a_trait=this.trait_names[this.generator.nextInt(this.num_trait_T)];
+			selected[t]=a_trait;
+			already_selected.add(a_trait);
 		}
 		return selected;
 	}
@@ -822,9 +875,13 @@ public class MainFrame {
 	 */
 	public String[] sample_genes(int number_genes_needed) {
 		String[] selected=new String[number_genes_needed];
+		HashSet<String> already_selected=new HashSet<String>();
 		for(int k=0;k<number_genes_needed;k++) {
-			selected[k]=this.gene_names[this.generator.nextInt(this.num_gene_K)];
-			// could select the same gene twice, which is OK.
+			String a_gene=this.gene_names[this.generator.nextInt(this.num_gene_K)];
+			while(already_selected.contains(a_gene))
+				a_gene=this.gene_names[this.generator.nextInt(this.num_gene_K)];
+			selected[k]=a_gene;
+			already_selected.add(a_gene);
 		}
 		return selected;
 	}

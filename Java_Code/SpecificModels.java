@@ -25,11 +25,18 @@ import java.util.Random;
  */
 public class SpecificModels {
 	
+	public static final String _additive="additive";
+	public static final String _epistatic="epistatic";
+	public static final String _compensatory="compensatory";
+	public static final String _heterogenous="heterogenous";
+	public static final String _compound="compound";
+	
 	public static final int random_seed =1;
 	public static final double default_weight=1.0;
 	public static final Random generator = new Random(random_seed);
 	
-	public static final String[] supported_models= {"additive", "epistatic", "compensatory", "heterogenous", "compound"};
+	public static final String[] supported_models= {SpecificModels._additive, SpecificModels._epistatic, 
+			SpecificModels._compensatory, SpecificModels._heterogenous, SpecificModels._compound};
 	public static final double logistic_odd_cutoff=0.5;
 	public static final double nagative_response = -1;
 	public static final double positive_response = 1;
@@ -43,7 +50,7 @@ public class SpecificModels {
 		int sample_size = X.length;
 		int num_var = X[0].length;
 		double[] response=new double[sample_size];
-		double[] coef = new double[sample_size];
+		double[] coef = new double[num_var];
 		for(int k=0;k<num_var;k++) // randomly assign coefficients 	
 			coef[k]=generator.nextGaussian();
 		for(int i=0;i<sample_size;i++) {
@@ -135,7 +142,7 @@ public class SpecificModels {
 				inf_value[n]+= coefs[m]*vars[m][n];
 			}
 		}
-		SpecificModels.standardization(inf_value, SpecificModels.default_weight);
+		SpecificModels.standardization_with_weight(inf_value, SpecificModels.default_weight);
 		double var_ori=variance(original);
 		double var_residue=var_ori*(1-vc)/vc;
 		//NormalDistribution normal = new NormalDistribution(0, Math.sqrt(var_residue));
@@ -292,15 +299,15 @@ public class SpecificModels {
 	 */
 	public static double[] response(String model, double[][] X, double weight) {
 		double[] output_response;
-		if(model.equals("additive")) {
+		if(model.equals(SpecificModels._additive)) {
 			output_response = SpecificModels.additive(X);
-		}else if(model.equals("epistatic")) {
+		}else if(model.equals(SpecificModels._epistatic)) {
 			output_response =  SpecificModels.epistatic(X);
-		}else if(model.equals("compensatory")) {
+		}else if(model.equals(SpecificModels._compensatory)) {
 			output_response =  SpecificModels.compensatory(X);
-		}else if(model.equals("heterogenous")) {
+		}else if(model.equals(SpecificModels._heterogenous)) {
 			output_response =  SpecificModels.heterogenous(X);
-		}else if(model.equals("compound")) {
+		}else if(model.equals(SpecificModels._compound)) {
 			output_response =  SpecificModels.compound(X);
 		}else {
 			System.out.println("Error: Model "+model+" is not supported.");
@@ -310,7 +317,7 @@ public class SpecificModels {
 			System.out.println();
 			return null;
 		}
-		SpecificModels.standardization(output_response, weight); // standardize to mean=0 and sd=1.
+		SpecificModels.standardization_with_weight(output_response, weight); // standardize to mean=0 and sd=1.
 		return output_response;
 	}
 	
@@ -408,17 +415,25 @@ public class SpecificModels {
 	
 	/*
 	 * Standardization of an array (so that mean = 0, sd =1) and assign an weight
+	 * 
+	 * Note that if the original variance==0, return a vector with all 0s, instead of NaN. 
 	 */
-	public static void standardization(double[] data, double weight) {
+	public static void standardization_with_weight(double[] data, double weight) {
 		double sum = 0;
-		for (int i = 0; i < data.length; i++) sum += data[i];
+		for (int i = 0; i < data.length; i++) 
+			sum += data[i];
 		double mean = sum/data.length;
 		double variance = 0;
-		for (int i = 0; i < data.length; i++) variance += (data[i] - mean)*(data[i] - mean);
+		for (int i = 0; i < data.length; i++) 
+			variance += (data[i] - mean)*(data[i] - mean);
 		variance = variance/data.length;
-		for (int i = 0; i < data.length; i++) {
-			data[i]=(data[i]-mean)/Math.sqrt(variance);  //Standardization to mean zero and variance 1.
-			data[i]=data[i]*weight;		// multiply the weight
+		if(variance==0) {
+			Arrays.fill(data, 0.0);
+		}else {
+			for (int i = 0; i < data.length; i++) {
+				data[i]=(data[i]-mean)/Math.sqrt(variance);  //Standardization to mean zero and variance 1.
+				data[i]=data[i]*weight;		// multiply the weight
+			}
 		}		
 	}
 	
