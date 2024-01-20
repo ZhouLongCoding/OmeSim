@@ -133,7 +133,8 @@ public class ArchitectureChecker {
 		ArrayList<String> potential_sources= this.causality_graph.get(target);
 		for(int k=0;k<potential_sources.size();k++) {
 			if(potential_sources.get(k).equals(source)) return true;
-		}return false;
+		}
+		return false;
 	}
 	
 	/*
@@ -146,7 +147,8 @@ public class ArchitectureChecker {
 			for(int k=0;k<potential_sources.size();k++) {
 				if(potential_sources.get(k).equals(source)) return true;
 			}			
-		}return false;
+		}
+		return false;
 	}
 	
 	

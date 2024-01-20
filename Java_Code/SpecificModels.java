@@ -31,6 +31,13 @@ public class SpecificModels {
 	public static final String _heterogenous="heterogenous";
 	public static final String _compound="compound";
 	
+	public static final boolean interaction_value_or_sign=true; // if true, using valued functions for interaction models (AND/OR/XOR);  
+												// if false, using signed functions for interaction models (AND/OR/XOR); 
+	public static boolean epistatic_value_or_sign= interaction_value_or_sign; // set to interaction_value_or_sign by default. 
+	public static boolean compensatory_value_or_sign= interaction_value_or_sign; // set to interaction_value_or_sign by default. 
+	public static boolean heterogenous_value_or_sign= interaction_value_or_sign; // set to interaction_value_or_sign by default. 
+
+	
 	public static final int random_seed =1;
 	public static final double default_weight=1.0;
 	public static final Random generator = new Random(random_seed);
@@ -60,12 +67,19 @@ public class SpecificModels {
 		}return response;
 	}
 	
+	public static double[] epistatic(double[][] X) {
+		return SpecificModels.epistatic_value_or_sign?
+				SpecificModels.epistatic_value(X):SpecificModels.epistatic_sign(X);
+	}
+	
 	/*
 	 * The epistatic model, same as the AND logical operator. 
 	 * 
+	 * Returns +1/-1 regardless of the values of input (i.e., only sign matters)
+	 * 
 	 * More than two vars are allowed, however suggested to just set as two (X[0].length ==2)
 	 */
-	public static double[] epistatic(double[][] X) {
+	public static double[] epistatic_sign(double[][] X) {
 		int sample_size = X.length;
 		int num_var = X[0].length;
 		double[] response=new double[sample_size];
@@ -77,20 +91,55 @@ public class SpecificModels {
 					break;
 				}
 			}
-		}return response;
+		}
+		return response;
+	}
+	
+	/*
+	 * The epistatic model, similar to the AND logical operator. 
+	 * 
+	 * Returns the first negative value if there is one; 
+	 * Or return the largest value if all positive.
+	 * 
+	 * More than two vars are allowed, however suggested to just set as two (X[0].length ==2)
+	 */
+	public static double[] epistatic_value(double[][] X) {
+		int sample_size = X.length;
+		int num_var = X[0].length;
+		double[] response=new double[sample_size];
+		for(int i=0;i<sample_size;i++) {
+			response[i]=SpecificModels.max(X[i]);
+		}
+		//Arrays.fill(response, SpecificModels.positive_response);
+		for(int i=0;i<sample_size;i++) {
+			for(int k=0;k<num_var;k++) {
+				if(X[i][k]<=0) {
+					response[i]=X[i][k];
+					break;
+				}
+			}
+		}
+		return response;
+	}
+	
+	public static double[] compensatory(double[][] X) {
+		return SpecificModels.compensatory_value_or_sign?
+				SpecificModels.compensatory_value(X):SpecificModels.compensatory_sign(X);
 	}
 	
 	/*
 	 * The compensatory model, same as the XOR logical operator. 
 	 * 
+	 * Returns +1/-1 regardless of the values of input (i.e., only sign matters)
+	 * 
 	 * Only two vars are allowed (X[0].length ==2)
 	 */
-	public static double[] compensatory(double[][] X) {
+	public static double[] compensatory_sign(double[][] X) {
 		int sample_size = X.length;
 		int num_var = X[0].length;
 		double[] response=new double[sample_size];
 		if(num_var==1) {
-			//Debug System.out.println("WARNING: compensatory model only supports 2 variables! But there is only 1 variable: will return the sign of this variable.");
+			System.out.println("WARNING: compensatory model only supports 2 variables! But there is only 1 variable: will return the sign of this variable.");
 			for(int i=0;i<sample_size;i++) {
 				if((X[i][0]>0))
 					response[i]=SpecificModels.positive_response;
@@ -98,21 +147,59 @@ public class SpecificModels {
 			}
 		}else {
 			if(num_var>2) {
-				//Debug System.out.println("WARNING: compensatory model only supports 2 variables! The first two are used.");
+				System.out.println("WARNING: compensatory model only supports 2 variables! The first two are used.");
 			}
 			for(int i=0;i<sample_size;i++) {
 				if((X[i][0]>0 && X[i][1]>0)||(X[i][0]<=0 && X[i][1]<=0))
 					response[i]=SpecificModels.positive_response;
-				else response[i]=SpecificModels.nagative_response;
+				else 
+					response[i]=SpecificModels.nagative_response;
 			}
 		}
 		return response;
 	}
 	
 	/*
-	 * The heterogenous model, same as the OR logical operator. 
+	 * The compensatory model, similar to the XOR logical operator. 
+	 * 
+	 * Returns the larger one absolute value if both values are positive or negative;
+	 * returns the negative one of the signs of two values are different
+	 * 
+	 * Only two vars are allowed (X[0].length ==2)
 	 */
+	public static double[] compensatory_value(double[][] X) {
+		int sample_size = X.length;
+		int num_var = X[0].length;
+		double[] response=new double[sample_size];
+		if(num_var==1) {
+			System.out.println("WARNING: compensatory model only supports 2 variables! But there is only 1 variable: will return the sign of this variable.");
+			for(int i=0;i<sample_size;i++) {
+				response[i]=X[i][0];
+			}
+		}else {
+			if(num_var>2) {
+				System.out.println("WARNING: compensatory model only supports 2 variables! The first two are used.");
+			}
+			for(int i=0;i<sample_size;i++) {
+				if((X[i][0]>0 && X[i][1]>0)||(X[i][0]<=0 && X[i][1]<=0))
+					response[i]=Math.max(Math.abs(X[i][0]), Math.abs(X[i][1])); // the larger of the two absolutes, a positive value
+				else 
+					response[i]=Math.min(X[i][0], X[i][1]);  // the smaller one, which must be a negative value when the signs are different.
+			}
+		}
+		return response;
+	}
+	
 	public static double[] heterogenous(double[][] X) {
+		return SpecificModels.heterogenous_value_or_sign?
+				SpecificModels.heterogenous_value(X):SpecificModels.heterogenous_sign(X);
+	}
+	/*
+	 * The heterogenous model, same as the OR logical operator.
+	 * 
+	 * Returns +1/-1 regardless of the values of input (i.e., only sign matters)
+	 */
+	public static double[] heterogenous_sign(double[][] X) {
 		int sample_size = X.length;
 		int num_var = X[0].length;
 		double[] response=new double[sample_size];
@@ -127,49 +214,115 @@ public class SpecificModels {
 		}
 		return response;
 	}
+	
+	/*
+	 * The heterogenous model, similar to the OR logical operator.
+	 * 
+	 * Returns the first positive value if there is one; 
+	 * Or return the smallest value if all negative.
+	 * 
+	 * Returns +1/-1 regardless of the values of input (i.e., only sign matters)
+	 */
+	public static double[] heterogenous_value(double[][] X) {
+		int sample_size = X.length;
+		int num_var = X[0].length;
+		double[] response=new double[sample_size];
+		for(int i=0;i<sample_size;i++) {
+			response[i]=SpecificModels.min(X[i]);
+		}
+		//Arrays.fill(response, SpecificModels.nagative_response);
+		for(int i=0;i<sample_size;i++) {
+			for(int k=0;k<num_var;k++) {
+				if(X[i][k]>0) {
+					response[i]=X[i][k];
+					break;
+				}
+			}
+		}
+		return response;
+	}
 
 	/*
 	 * Generating the term contributed by many small (however unknown) contributors
 	 * Note that double[][] grm is NOT used yet. Here use the sum of many small contributors. 
+	 * 
+	 * To satisfy: infinitesimal_vc = var(infinitesimal) / (var(ori) + var(infinitesimal))
+	 * One can solve that:
+	 * 	var(infinitesimal) = var(ori) * (infinitesimal_vc) / (1-infinitesimal_vc)
+	 * 
 	 */
-	public static double[] add_infinitesimal_term(MainFrame main_frame, double[] original, double vc) {
+	public static double[] add_infinitesimal_term(MainFrame main_frame, double[] original, double infinitesimal_vc) {
 		double[][] vars = CausalTerm.sample_genotype_vars_wg(main_frame.num_infinitesimal, main_frame);
 		double[] inf_value=new double[main_frame.num_subj_N];
 		double[] coefs=new double[main_frame.num_infinitesimal];
-		for(int m=0;m<main_frame.num_infinitesimal;m++) {
+		for(int m=0;m<main_frame.num_infinitesimal;m++) {  // randomly initialize infinitesimal terms' coefficients. 
 			coefs[m]=main_frame.generator.nextGaussian();
+		}
+		for(int m=0;m<main_frame.num_infinitesimal;m++) {
 			for(int n=0;n<main_frame.num_subj_N;n++) {
-				inf_value[n]+= coefs[m]*vars[m][n];
+				inf_value[n] += coefs[m]*vars[m][n];
 			}
 		}
-		SpecificModels.standardization_with_weight(inf_value, SpecificModels.default_weight);
+		SpecificModels.standardization_with_weight(inf_value, 1.0);
 		double var_ori=variance(original);
-		double var_residue=var_ori*(1-vc)/vc;
+		double var_inf=var_ori * infinitesimal_vc / (1-infinitesimal_vc);
 		//NormalDistribution normal = new NormalDistribution(0, Math.sqrt(var_residue));
-		double[] added= new double[original.length];
+		double[] inf_added= new double[original.length];
 		for(int i=0;i<original.length;i++) 
-			added[i]=original[i]+inf_value[i]*Math.sqrt(var_residue); //normal.sample();
-		return added;
+			inf_added[i]=original[i]+inf_value[i]*Math.sqrt(var_inf); //normal.sample();
+		return inf_added;
 	} 
 	
 	/*
 	 * Adding the residue term contributed by noise or environmental factors
-	 * double h2 is the variance component of the original term; (1-vc is the variance component of the residue term.)
+	 * 
+	 * double h2 is the variance component of the original term; (which is called "heritability" in genetics)
+	 * (the parameter noise_vc = 1-h2 is the variance component of the residue term.)
 	 * 
 	 * the variance components will ensure that var(ori)/var(total) = h2
-	 * leading to the solution of var(residue)= var(ori)(1-h2)/h2.
+	 * leading to the solution of var(noise)= var(ori)(1-h2)/h2.
 	 * 
-	 * Note that both noise and infinitesmal terms can be added using this function. 
 	 */
-	public static double[] add_residue_term(double[] original, double vc) {
+	public static double[] add_noise_term(double[] original, double noise_vc) {
+		double h2 = 1 - noise_vc;
 		double var_ori=variance(original);
-		double var_residue=var_ori*(1-vc)/vc;
+		double var_noise=var_ori*(1-h2)/h2;
 		//NormalDistribution normal = new NormalDistribution(0, Math.sqrt(var_residue));
-		double[] added= new double[original.length];
-		for(int i=0;i<original.length;i++) 
-			added[i]=original[i]+generator.nextGaussian()*Math.sqrt(var_residue); //normal.sample();
-		return added;
+		double[] noise_added= new double[original.length];
+		for(int i=0;i<original.length;i++) {
+			// add a normal.sample();
+			noise_added[i]=original[i]+
+				SpecificModels.generator.nextGaussian()*Math.sqrt(var_noise);
+		} 
+		return noise_added;
 	} 
+	
+	/*
+	 * Given the "raw" values (containing specified biological terms only), add infinitesimal and noise terms based on
+	 * predefined variance component. 
+	 * 
+	 * Note that the proportion of noise = noise/overall; proportion of infinitesimal = infinitesimal/(infinitesimal+biological)
+	 * 
+	 * And finally, if specified, convert to binary according to the mode ("logistic", "liability").
+	 */
+	public static double[] add_inf_noise_convert2bin(double[] response_value, MainFrame main_frame, CausalTerm causal_term) {
+		double[] inf_added, noise_added;
+		// add infinitesimal if it is present
+		if(!Double.isNaN(causal_term.infinitesimal_vc_value)) {
+			inf_added=SpecificModels.add_infinitesimal_term(main_frame, response_value, causal_term.infinitesimal_vc_value);
+			noise_added = SpecificModels.add_noise_term(inf_added, causal_term.noise_vc_value);
+		}
+		// add noise only (when infinitesimal is absent)
+		else{
+			noise_added = SpecificModels.add_noise_term(response_value, causal_term.noise_vc_value);
+		}
+		// if it is a trait and a binary, convert to binary:
+		if(causal_term.ID.startsWith("Binary_Trait_")) {
+			return SpecificModels.quantitative2binary(noise_added);
+		}else {
+			return noise_added;		
+		}
+	}
 	
 	/*
 	 * OLD VERSION using a file. Has been replaced with the Object-based.  
@@ -322,24 +475,6 @@ public class SpecificModels {
 	}
 	
 	/*
-	 * given the "raw" values (containing specified biological terms only), add infinitesimal and noise terms based on
-	 * predefined variance component. And finally, if specified, convert to binary according to the mode ("logistic", "liability").
-	 */
-	public static double[] add_inf_noise_bin(double[] response_value, MainFrame main_frame, CausalTerm causal_term) {
-		double[] inf_added, noise_added;
-		// add infinitesimal if it is not NaN
-		if(!Double.isNaN(causal_term.infinitesimal_vc_value)) {
-			double adjusted_inf_vc = causal_term.infinitesimal_vc_value/(1-causal_term.noise_vc_value);
-			inf_added=SpecificModels.add_infinitesimal_term(main_frame, response_value, adjusted_inf_vc);
-			noise_added = SpecificModels.add_residue_term(inf_added, causal_term.noise_vc_value);
-		}
-		// add noise (unconditionally)
-		noise_added = SpecificModels.add_residue_term(response_value, causal_term.noise_vc_value);
-		if(causal_term.ID.startsWith("Binary_Trait_")) {
-			return SpecificModels.quantitative2binary(noise_added);
-		}else return noise_added;		
-	}
-	/*
 	 * Mode can be in {"logistic", "liability"}
 	 */
 	public static double[] quantitative2binary(double[] quantitative, String mode){
@@ -355,7 +490,7 @@ public class SpecificModels {
 			Arrays.sort(copy);
 			double cutoff=copy[sample_size/2]; // the median 
 			for(int i=0;i<sample_size;i++) {
-				binary[i]=(quantitative[i]>cutoff)?1:0;
+				binary[i]=(quantitative[i]>=cutoff)?1:0;
 			}
 		}else {
 			System.out.println("Error: Mode "+mode+" is invalid. Only logistic and liability are allowed.");
@@ -374,7 +509,7 @@ public class SpecificModels {
 	}
 	
 	/*
-	 * Calculate variance of a vector
+	 * Calculate population variance of a vector (divide by n not n-1.
 	 */
 	public static double variance(double[] data) {
 		double sum = 0;
@@ -387,7 +522,7 @@ public class SpecificModels {
 	}
 	
 	/*
-	 * Calculate variance of a vector
+	 * Calculate correlation of two vectors
 	 */
 	public static double correlation(double[] data1, double[] data2) {
 		if(data1.length!=data2.length) {
@@ -403,7 +538,8 @@ public class SpecificModels {
 		double mean1 = sum1/length;
 		double mean2 = sum2/length;
 		double numerator = 0;
-		double denominator1=0, denominator2=0;
+		double denominator1=0;
+		double denominator2=0;
 		for (int i = 0; i < length; i++) {
 			numerator += (data1[i]-mean1)*(data2[i]-mean2);
 			denominator1 += (data1[i] - mean1)*(data1[i] - mean1);
@@ -417,6 +553,9 @@ public class SpecificModels {
 	 * Standardization of an array (so that mean = 0, sd =1) and assign an weight
 	 * 
 	 * Note that if the original variance==0, return a vector with all 0s, instead of NaN. 
+	 * This ad hoc processing leaves the opportunity for the data to be updated in the next
+	 * round, instead of being NaN forever. 
+	 * 
 	 */
 	public static void standardization_with_weight(double[] data, double weight) {
 		double sum = 0;
@@ -429,11 +568,14 @@ public class SpecificModels {
 		variance = variance/data.length;
 		if(variance==0) {
 			Arrays.fill(data, 0.0);
+			return;  // return an all zero vector. 
 		}else {
+			double sd=Math.sqrt(variance);
 			for (int i = 0; i < data.length; i++) {
-				data[i]=(data[i]-mean)/Math.sqrt(variance);  //Standardization to mean zero and variance 1.
+				data[i]=(data[i]-mean)/sd;  //Standardization to mean zero and variance 1.
 				data[i]=data[i]*weight;		// multiply the weight
 			}
+			return;  // return the standardized and weighted vector.
 		}		
 	}
 	
@@ -442,9 +584,15 @@ public class SpecificModels {
 	 */
 	public static void to_prob_distribution(double[] input) {
 		double sum=0;
-		for(int k=0;k<input.length;k++)sum+=input[k];
-		if(sum==0)System.out.println("Error: Sum of an Propotion Array = 0.");
-		for(int k=0;k<input.length;k++)input[k]=input[k]/sum;
+		for(int k=0;k<input.length;k++) {
+			sum+=input[k];
+		}
+		if(sum==0){
+			System.out.println("Error: Sum of an Propotion Array = 0.");
+		}
+		for(int k=0;k<input.length;k++) {
+			input[k]=input[k]/sum;
+		}
 	}
 	
 	/*
@@ -452,10 +600,44 @@ public class SpecificModels {
 	 */
 	public static double[] to_prob_distribution(int[] input) {
 		double sum=0;
-		for(int k=0;k<input.length;k++)sum+=input[k];
-		if(sum==0)System.out.println("Error: Sum of an Propotion Array = 0.");
+		for(int k=0;k<input.length;k++) {
+			sum += input[k];
+		}
+		if(sum==0) {
+			System.out.println("Error: Sum of an Propotion Array = 0.");
+		}
 		double[] output=new double[input.length];
-		for(int k=0;k<input.length;k++)output[k]=input[k]/sum;
+		for(int k=0;k<input.length;k++) {
+			output[k] = input[k]/sum;
+		}
 		return output;
+	}
+	
+	/*
+	 * maximal value in the array 
+	 */
+	public static double max(double[] input) {
+		double max=input[0];
+		if(input.length>1){
+			for(int i=1;i<input.length;i++) {
+				if(max<input[i])
+					max=input[i];
+			}
+		}
+		return max;
+	}
+	
+	/*
+	 * minimal value in the array 
+	 */
+	public static double min(double[] input) {
+		double min=input[0];
+		if(input.length>1){
+			for(int i=1;i<input.length;i++) {
+				if(min>input[i])
+					min=input[i];
+			}
+		}
+		return min;
 	}
 }

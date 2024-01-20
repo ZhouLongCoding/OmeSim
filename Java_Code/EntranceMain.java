@@ -31,6 +31,7 @@ public class EntranceMain {
 		}else {
 			if(args[0].equals("Simulate")) {
 				// load data
+				System.out.println("===== Simulate Data =====");
 				String parameter_file=null;
 				for(int p=1;p<args.length;p++) {
 					if(args[p].equals("-input")) parameter_file=args[p+1];
@@ -45,9 +46,10 @@ public class EntranceMain {
 				// iteratively calculate values and generating genuine correlation arrays
 				// output all files (omics values, causality graph, and genuine correlations)
 				MainFrame main_frame=new MainFrame(parameter_file);
-				System.out.println("All Generated!");
+				System.out.println("===== ALL DONE! =====");
 
 			}else if(args[0].equals("Causality")) {
+				System.out.println("===== Causality Check =====");
 				String causal_graph_file=null;
 				String triple_IDs_file=null;
 				for(int p=1;p<args.length;p++) {

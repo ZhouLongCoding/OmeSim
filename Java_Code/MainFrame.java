@@ -35,7 +35,7 @@ public class MainFrame {
 	
 	// POP-GENE PARAMETERS 
 	public double max_maf=0.5;
-	public double min_maf=0.0;
+	public double min_maf=0.05;
 	public int location_distance=0; // this is used to guard against LD;
 	
 	// Number OF ITERATIONS (Iteration is needed because of that many terms are not initialized and will be iteratively assigned). 
@@ -53,10 +53,15 @@ public class MainFrame {
 															//No [4]=infinitesimal at this stage as infinitesimal component will be added later before adding noise.
 	public double weights_relative_range = 0.5; 			// relative range of the above gene_contri_weights[] and traits_contri_weights[]
 	public double traits_var_comp_inf_min = 0.05;  // minimal variance component for the infinitesimal term: traits only (no genes).  
-	public double traits_var_comp_inf_max = 0.45;  // maximal variance component for the infinitesimal term: traits only (no genes).  
+	public double traits_var_comp_inf_max = 0.45;  // maximal variance component for the infinitesimal term: traits only (no genes).
+										
 	public double var_comp_noise_min = 0.1;  // Note that the non-noise part may not be deemed as "heritability" as the other traits (and noises in the traits and expressions) are also involved.  
 	public double var_comp_noise_max = 0.9;  // Note that the noise term will be added after the infinitesimal term, and the nomalization will be conducted again.   
-
+							   // NOTE:	// Proportion of infinitesimal = infinitesimal/(infinitesimal+biological)
+										// Proportion of noise = noise/(noise + [infinitesimal(if any) + biological])
+										// In other words, we add infinitesimal to biological first, and then add noise.
+										// so the above two var_comp can be freely specified as a value between 0 and 1, and 
+										// which will be normalized within the functions adding them. 
 	public int cis_var_flanking = 500000;	// flanking regions in base-pair defining the region for cis-variants. 
 	public int min_var_gene = 10; 			// if a gene (and its flanking cis region contains #SNV < min_var_gene, it will be removed.   
 	public int cis_variant_numbers_mean= 5;  // mean of number of cis-variants of a gene 
@@ -231,6 +236,7 @@ public class MainFrame {
 	 */
 	public void readin_genotype_with_maf_ld_filters() {
 		try {
+			System.out.println("Started reading genotype file.");
 			BufferedReader br=new BufferedReader(new FileReader(this.genotype_file));
 			String line=br.readLine();
 			ArrayList<String> chr_names_array=new ArrayList<String>();
@@ -519,6 +525,7 @@ public class MainFrame {
 	public void read_in_genes_locs() {
 		ArrayList<String> gene_names_list=new ArrayList<String>();
 		try {
+			System.out.println("Started reading gene locations.");
 			BufferedReader br= new BufferedReader(new FileReader(this.genes_file));
 			String line=br.readLine();
 			// skip headers
@@ -565,7 +572,7 @@ public class MainFrame {
 		adjust terms with interaction model to two factors only. 
 	 */
 	public void set_terms_model() {
-		System.out.println("Started generating terms model file.");
+		System.out.println("=======Started generating terms model file.=======");
 		this.trait_names=new String[this.num_trait_T]; 
 		this.trait_finalized=new boolean[this.num_trait_T];
 		this.causality_graph=new HashMap<String, ArrayList<String>>();
@@ -916,8 +923,8 @@ public class MainFrame {
 	 * Return the index of the selected chromosome 
 	 */
 	public int sample_chr() {
-		double the_random = this.generator.nextDouble();
-		double[] frequency = SpecificModels.to_prob_distribution(this.num_geno_variant_M.clone());
+		int[] var_nums_per_chr=this.num_geno_variant_M.clone();
+		double[] frequency = SpecificModels.to_prob_distribution(var_nums_per_chr);
 		double sum=0;
 		for(int i=0;i<this.num_chr;i++) sum+=frequency[i];
 		if(Double.compare(sum, 1.0)!=0) {
@@ -925,6 +932,7 @@ public class MainFrame {
 			return -1;
 		}
 		double current_cut=0.0;
+		double the_random = this.generator.nextDouble();
 		for(int i=0;i<frequency.length;i++) {
 			if(the_random>=current_cut && the_random<current_cut+frequency[i])
 				return i;
@@ -943,7 +951,7 @@ public class MainFrame {
 	 */
 	
 	public void calculate_correlations() { 
-		System.out.println("Started calculating correlation matrices.");
+		System.out.println("===== Started calculating correlation matrices. =====");
 		// assign public double[][] corr_KxK;	// correlations between gene expressions
 		System.out.println("Started calculatiing correlation KxK.");
 		this.corr_KxK=new double[this.num_gene_K][]; // a triangle matrix 
@@ -981,7 +989,7 @@ public class MainFrame {
 		BEFORE adding the noise and infinitesimal terms to reflect genuine correlations 
 	 */
 	public void calculate_associations(CausalTerm[] full_terms) {
-		System.out.println("Started calculating association matrices.");
+		System.out.println("===== Started calculating association matrices. =====");
 		System.out.println("Started calculating association Kxm.");
 		this.asso_Kxm= new double[this.num_gene_K][]; // the length of each asso_KxM[k] is different, which is the number of genetic variants contributing to the expression
 		for(int k=0;k<this.num_gene_K;k++) { 
@@ -1017,6 +1025,7 @@ public class MainFrame {
 	 */
 	public void output_files(String output_file_folder) {
 		try {
+			System.out.println("===== Started outputing files. =====");
 			// Expression file
 			BufferedWriter bw=new BufferedWriter(new FileWriter(output_file_folder+"/expressions.csv"));
 			bw.write("#Gene_ID");

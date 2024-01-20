@@ -88,7 +88,7 @@ public class CausalTerm {
 		this.infinitesimal_vc_value=isTrait(this.ID,main_frame)?Double.parseDouble(info[8]):Double.NaN;
 		this.noise_vc_value=Double.parseDouble(info[9]);
 		// extract genotype data from main_frame.geno_G, 
-		this.sample_geno_vars_in_genes_(main_frame);
+		this.sample_geno_vars_in_genes(main_frame);
 		// assign back to MainFrame
 		if(isGene(this.ID, main_frame)) {
 			if(this.geno_G_trans_var!=null && this.geno_G_cis_var==null) {
@@ -185,9 +185,9 @@ public class CausalTerm {
 			main_frame.trait_Y[focal_term_index]=SpecificModels.response(this.model, combined_X, SpecificModels.default_weight);
 			main_frame.trait_finalized[focal_term_index]= (exps_finalized && traits_finalized); // it is finalized if all depending terms are
 		}else {  // must be a gene
-			if(this.ID.equals("RAB3B")) {
-				System.out.println("Let us debug");
-			}
+//			if(this.ID.equals("PTPRE")) {
+//				System.out.println("Let us debug");
+//			}
 			int focal_term_index=main_frame.gene_names2index.get(this.ID);
 			main_frame.exp_Z[focal_term_index]=SpecificModels.response(this.model, combined_X, SpecificModels.default_weight);
 			main_frame.gene_exp_finalized[focal_term_index]= (exps_finalized && traits_finalized); // it is finalized if all depending terms are
@@ -205,19 +205,23 @@ public class CausalTerm {
 	 * A problem might be that the variants are NOT sampled proportional to the gene length, which is unfair for large genes. 
 	 * A FUTURE development may make it more "fair" by giving more weights to larger genes.
 	 */
-	public void sample_geno_vars_in_genes_(MainFrame main_frame){
+	public void sample_geno_vars_in_genes(MainFrame main_frame){
 		if(main_frame.gene2filtered_cis_var==null) {
 			System.out.println("Error: this.gene2filtered_cis_var not initiated!");
 			return;
 		}
 		if(isGene(this.ID, main_frame)) { // this term is a gene, only which has cis
 			if(this.num_cis!=-1) {
+				HashSet<Integer> already_selected=new HashSet<Integer>(); // ensure not to select the same variant twice. 
 				this.geno_G_cis_var=new double[this.num_cis][];
 				this.geno_G_cis_loc=new String[this.num_cis];
 				double[][] vars_in_the_gene=main_frame.gene2filtered_cis_var.get(this.ID);
 				String[] locs_in_the_gene=main_frame.gene2filtered_cis_loc.get(this.ID);
 				for(int m_cis=0;m_cis<this.num_cis;m_cis++) {								
 					int var_index=main_frame.generator.nextInt(vars_in_the_gene.length);
+					while(already_selected.contains(var_index)) { //duplicated; re-do.
+						var_index=main_frame.generator.nextInt(vars_in_the_gene.length);
+					}
 					this.geno_G_cis_var[m_cis]=vars_in_the_gene[var_index];
 					this.geno_G_cis_loc[m_cis]=locs_in_the_gene[var_index];
 				}
@@ -233,20 +237,28 @@ public class CausalTerm {
 			if(this.num_trans<this.trans_var_genes.length) {
 				System.out.println("EOORR: "+this.ID+":num_trans<this.trans_var_genes.length.");
 			}
+			HashSet<Integer>[] alreday_selected=new HashSet[this.trans_var_genes.length];
+			for(int k=0;k<this.trans_var_genes.length;k++) { // each gene has a set of already selected.
+				alreday_selected[k]=new HashSet<Integer>();
+			}
 			for(int m_trans=0; m_trans<this.trans_var_genes.length;m_trans++) {
 				// process each gene sequentially so that each gene has at least a trans-variant. 
-				double[][] vars_in_a_gene=main_frame.gene2filtered_cis_var.get(trans_var_genes[m_trans]);
-				String[] locs_in_a_gene=main_frame.gene2filtered_cis_loc.get(trans_var_genes[m_trans]);
+				double[][] vars_in_a_gene=main_frame.gene2filtered_cis_var.get(this.trans_var_genes[m_trans]);
+				String[] locs_in_a_gene=main_frame.gene2filtered_cis_loc.get(this.trans_var_genes[m_trans]);
 				int var_index=main_frame.generator.nextInt(vars_in_a_gene.length);
+				alreday_selected[m_trans].add(var_index);
 				this.geno_G_trans_var[m_trans]=vars_in_a_gene[var_index];
 				this.geno_G_trans_loc[m_trans]=locs_in_a_gene[var_index];
 			}
 			if(this.num_trans>this.trans_var_genes.length) { // more variants remained after assigning each gene a variant
 				for(int m_trans=this.trans_var_genes.length;m_trans<this.num_trans;m_trans++) {
 					int gene_index=main_frame.generator.nextInt(this.trans_var_genes.length); // sample a genetic variant from this gene
-					double[][] vars_in_a_gene=main_frame.gene2filtered_cis_var.get(trans_var_genes[gene_index]);
-					String[] locs_in_a_gene=main_frame.gene2filtered_cis_loc.get(trans_var_genes[gene_index]);
+					double[][] vars_in_a_gene=main_frame.gene2filtered_cis_var.get(this.trans_var_genes[gene_index]);
+					String[] locs_in_a_gene=main_frame.gene2filtered_cis_loc.get(this.trans_var_genes[gene_index]);
 					int var_index=main_frame.generator.nextInt(vars_in_a_gene.length);
+					while(alreday_selected[gene_index].contains(var_index)) {//duplicated; re-do.
+						var_index=main_frame.generator.nextInt(vars_in_a_gene.length);
+					}
 					this.geno_G_trans_var[m_trans]=vars_in_a_gene[var_index];
 					this.geno_G_trans_loc[m_trans]=locs_in_a_gene[var_index];
 				}	
@@ -259,11 +271,22 @@ public class CausalTerm {
 	 * 
 	 */
 	public static double[][] sample_genotype_vars_wg(int num_sampling_vars, MainFrame main_frame){
-		if(num_sampling_vars<0) // for terms without genetic component, the number of variants are set to -1 by MainFrame.set_terms_model().
+		if(num_sampling_vars<0) {
+			// for terms without genetic component, the number of variants are set to -1 by MainFrame.set_terms_model().
+			System.out.println("Error: in sample_genotype_vars_wg(int num_sampling_vars, MainFrame main_frame): num_sampling_vars<0");
 			return null;
+		}
 		double[][] sampled_vars=new double[num_sampling_vars][];
+//		debug HashMap<Integer, Integer> chr_indexes=new HashMap<Integer, Integer>();
 		for(int m=0;m<num_sampling_vars;m++) {  // no deep clone; therefore no cost of memory.
-			int chr_index=main_frame.sample_chr();  // get a chr index based on the number of variants in all chrs. 
+			int chr_index=main_frame.sample_chr();  // get a chr index based on the number of variants in all chrs.
+//			//debug
+//			if(chr_indexes.containsKey(chr_index)) {
+//				int count=chr_indexes.get(chr_index);
+//				chr_indexes.put(chr_index, count+1);
+//			}else {
+//				chr_indexes.put(chr_index, 1);
+//			}
 			sampled_vars[m]=main_frame.geno_G[chr_index][main_frame.generator.nextInt(main_frame.num_geno_variant_M[chr_index])];
 		}
 		return sampled_vars;
@@ -311,10 +334,10 @@ public class CausalTerm {
 	 * Calculate correlation matrices BEFORE adding noise term and infinitesmal term. (the "gold-standard" relationship).
 	 */
 	public static void calculate_all_value(MainFrame main_frame, CausalTerm[] full_terms) {
-		System.out.println("Started to iteratively calculating terms");
+		System.out.println("===== Started to iteratively calculating terms. =====");
 		// iteratively calculate the raw values of terms 
 		for(int r=0;r<main_frame.iteration_rounds;r++) {
-			System.out.println("===== Round "+r+" =====");
+			System.out.println("----- Round "+r+" -----");
 			for(int t_index=0;t_index<full_terms.length;t_index++) {
 				if(isGene(full_terms[t_index].ID, main_frame) && 
 						!main_frame.gene_exp_finalized[main_frame.gene_names2index.get(full_terms[t_index].ID)]) {
@@ -341,19 +364,21 @@ public class CausalTerm {
 			public double[][] asso_MxT;	// associations between individual genetic variants and traits */
 		main_frame.calculate_associations(full_terms);	 
 		// Next finalize them by adding noise and inf terms.
+		System.out.println("===== Strated adding noise and infinitesmal (if any) terms. =====");
 		for(int t_index=0;t_index<full_terms.length;t_index++) {
 			if(isGene(full_terms[t_index].ID, main_frame)) { // adding noise term
 				int focal_term_index=main_frame.gene_names2index.get(full_terms[t_index].ID);
-				main_frame.exp_Z[focal_term_index]=SpecificModels.add_inf_noise_bin(
+				main_frame.exp_Z[focal_term_index]=SpecificModels.add_inf_noise_convert2bin(
 						main_frame.exp_Z[focal_term_index], main_frame, full_terms[t_index]);
 			}
 			if(isTrait(full_terms[t_index].ID, main_frame)){ // adding noise term and infinitesmal term (if exists); and transfer to binary (if needed).
 				int focal_term_index=main_frame.trait_names2index.get(full_terms[t_index].ID);
-				main_frame.trait_Y[focal_term_index]=SpecificModels.add_inf_noise_bin(
+				main_frame.trait_Y[focal_term_index]=SpecificModels.add_inf_noise_convert2bin(
 						main_frame.trait_Y[focal_term_index], main_frame, full_terms[t_index]);
 			}			
 		}
-		System.out.println("Finished calculating terms");
+		System.out.println("Finished calculating terms, correlations, associations, and adding noise/infinitesmal (if any).");
+		System.out.println("===================================");
 	}
 	
 	
