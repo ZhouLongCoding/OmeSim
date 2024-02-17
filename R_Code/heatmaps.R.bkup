@@ -1,0 +1,26 @@
+library(pheatmap)
+library(tidyverse)
+library(ggplotify)
+library(heatmaply)
+
+sample_size=146
+num_gene=7076
+num_trait=1000
+
+width_ratio=10
+height_ratio=8
+
+expressions<-read.csv("expressions.csv",header=TRUE,row.names=1, check.names=FALSE)
+png("expressions.png",width=width_ratio*length(expressions),height=height_ratio*length(expressions[,1]))
+pheatmap(expressions,  main="Expression and clustering of all genes")
+dev.off()
+
+traits<-read.csv("traits.csv",header=TRUE,row.names=1, check.names=FALSE)
+png("traits.png",width=width_ratio*length(traits),height=height_ratio*length(traits[,1]))
+pheatmap(traits,  main="Traits and clustering of all subjects")
+dev.off()
+
+corr_trait_by_trait<-read.csv("corr_trait_by_trait.csv",header=TRUE,row.names=1, check.names=FALSE)
+png("corr_trait_by_trait.png",width=width_ratio*length(corr_trait_by_trait),height=height_ratio*length(corr_trait_by_trait[,1]))
+pheatmap(corr_trait_by_trait, main="Correlations between all traits", cluster_rows = FALSE, cluster_cols = FALSE)
+dev.off()
