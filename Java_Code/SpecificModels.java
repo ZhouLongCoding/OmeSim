@@ -270,6 +270,7 @@ public class SpecificModels {
 		double[] inf_added= new double[original.length];
 		for(int i=0;i<original.length;i++) 
 			inf_added[i]=original[i]+inf_value[i]*Math.sqrt(var_inf); //normal.sample();
+		SpecificModels.standardization_with_weight(inf_added, 1);
 		return inf_added;
 	} 
 	
@@ -294,6 +295,7 @@ public class SpecificModels {
 			noise_added[i]=original[i]+
 				SpecificModels.generator.nextGaussian()*Math.sqrt(var_noise);
 		} 
+		SpecificModels.standardization_with_weight(noise_added, 1);
 		return noise_added;
 	} 
 	
@@ -320,6 +322,7 @@ public class SpecificModels {
 		if(causal_term.ID.startsWith("Binary_Trait_")) {
 			return SpecificModels.quantitative2binary(noise_added);
 		}else {
+			SpecificModels.standardization_with_weight(noise_added, 1);
 			return noise_added;		
 		}
 	}
@@ -368,7 +371,7 @@ public class SpecificModels {
 						input_X[i][k]=all_terms.get(contributing_term_IDs[k])[i];
 					}
 				}
-				double[] the_new_term=response(info[1], input_X, SpecificModels.default_weight);
+				double[] the_new_term=response_with_standardization(info[1], input_X, SpecificModels.default_weight);
 				all_terms.put(info[0], the_new_term);
 				line=br.readLine();
 			}br.close();
@@ -427,7 +430,7 @@ public class SpecificModels {
 					input_X[i][k]=all_terms.get(compound_protocol.step_terms[s][k])[i];
 				}
 			}
-			double[] the_new_term=response(compound_protocol.step_models[s], input_X, SpecificModels.default_weight);
+			double[] the_new_term=response_with_standardization(compound_protocol.step_models[s], input_X, SpecificModels.default_weight);
 			all_terms.put(compound_protocol.step_IDs[s], the_new_term);
 		}			
 		if(all_terms.containsKey("Y")) {
@@ -450,7 +453,7 @@ public class SpecificModels {
 	 * Based on models, call different functions
 	 * "additive", "epistatic", "compensatory", "heterogenous", "compound"
 	 */
-	public static double[] response(String model, double[][] X, double weight) {
+	public static double[] response_with_standardization(String model, double[][] X, double weight) {
 		double[] output_response;
 		if(model.equals(SpecificModels._additive)) {
 			output_response = SpecificModels.additive(X);

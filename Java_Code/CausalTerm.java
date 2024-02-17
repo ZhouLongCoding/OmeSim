@@ -182,14 +182,14 @@ public class CausalTerm {
 		double[][] combined_X=this.combine_arrays_weighted();
 		if(isTrait(this.ID, main_frame)) {// this is a trait
 			int focal_term_index=main_frame.trait_names2index.get(this.ID);
-			main_frame.trait_Y[focal_term_index]=SpecificModels.response(this.model, combined_X, SpecificModels.default_weight);
+			main_frame.trait_Y[focal_term_index]=SpecificModels.response_with_standardization(this.model, combined_X, SpecificModels.default_weight);
 			main_frame.trait_finalized[focal_term_index]= (exps_finalized && traits_finalized); // it is finalized if all depending terms are
 		}else {  // must be a gene
 //			if(this.ID.equals("PTPRE")) {
 //				System.out.println("Let us debug");
 //			}
 			int focal_term_index=main_frame.gene_names2index.get(this.ID);
-			main_frame.exp_Z[focal_term_index]=SpecificModels.response(this.model, combined_X, SpecificModels.default_weight);
+			main_frame.exp_Z[focal_term_index]=SpecificModels.response_with_standardization(this.model, combined_X, SpecificModels.default_weight);
 			main_frame.gene_exp_finalized[focal_term_index]= (exps_finalized && traits_finalized); // it is finalized if all depending terms are
 		}		
 	}
