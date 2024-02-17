@@ -162,9 +162,9 @@ Visualization_Code_Folder.  Full (absolute) path to the folder for R scripts to 
 	
 Large_Figures_Needed [Default = false]. Whether large figures for all data are needed. Generating full pictures of all data expressions and traits (correlations, causality and the original data) may be memory consuming and the outcome could be very large and difficult to view. We assume that the most useful part of the graphics function is the pathway-specific and trait-specific figures. Nevertheless, we offer this function, although the default is ‘false’. 
 	
-Trait_Causality_Degree = 3;		// degree of trait-based sub-causality graphs
+Trait_Causality_Degree [Default = 4]. Parameter to specify how many degrees between a source term (i.e., a node in the causality graph) and the target trait. The “degree” is defined as the number of edges that the source node has to go through to reach the target trait node. Sub-causality graphs for all degree < Trait_Causality_Degree will be generated. 
 	
-Edge_Num_Ratio=300;			// controlling the size of sub-causality graphs
+Edge_Num_Ratio [Default = 300]. Parameter controlling the size of the sub-causality graphs. The actual size of the sub-causality graph is calculated by: Edge_Num_Ratio *Math.pow(num_of_edge_in_the_graph, 0.4).	
 
 Parameters for the function Causality. 
 
@@ -186,3 +186,4 @@ Qingrun Zhang < qingrun.zhang@ucalgary.ca>
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
