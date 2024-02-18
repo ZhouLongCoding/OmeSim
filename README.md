@@ -28,8 +28,9 @@ Then one will see the outcome files in the specified folder. By comparing them t
 
 OmeSim function Simulate adapts a bottom-up strategy to simulate omics (i.e., gene expression in the release 1.0) and phenotypic traits. Depicted in the flow-chart below, OmeSim first loads necessary (genotype, gene models, and pathway) data (Figure 1A), then generate a causality graph recording quantified contributing factors of each terms (gene expressions and traits) based on user-specified parameters (Figure 1B), and then iteratively calculates values of the gene expressions and traits (Figure 1C) contributed by genetics and other terms. After calculating the values, OmeSim will generate the gold-standard datasets (correlations between terms and associations between genetics and terms) (Figure 1D) and add infinitesimal and noise terms to finalize the ultimate values of gene expressions and traits (Figure 1E). The function Causality simply checks the causality relationship using the previously generated causality graph (Figure 1F). 
 
+![Figure1](https://github.com/ZhouLongCoding/OmeSim/assets/96537327/e9d0a5fc-1314-42d3-a879-acb7483ceaef)
 
-A figure here. 
+ 
 
 4.	Input files
 
