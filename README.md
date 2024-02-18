@@ -61,6 +61,10 @@ Third, at the detailed level, three correlation files, i.e., corr_exp_by_exp.csv
 
 Fourth, the heatmap of correlation files and association files, the visualization of the causality graph is also provided in the output folder. The examples are in Figure 2 and Figure 3.   
 
+![Figure4](https://github.com/ZhouLongCoding/OmeSim/assets/96537327/4a0fe905-4bff-42a2-a465-532100ea3298)
+![Figure3](https://github.com/ZhouLongCoding/OmeSim/assets/96537327/c8bfe432-173d-4e9f-b48b-3a09472820bb)
+
+
 The output files for function Causality are the file of causality models answering the queries lines in the input file together with visualization files (if elected by the input parameters). 
 
 6.	Parameters 
