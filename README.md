@@ -183,8 +183,10 @@ Output_Folder Full (absolute) path to the folder for output files.
 7.	Contact:
 
 Zhou Long < zhoulongnyc@gmail.com>  
-
 Qingrun Zhang < qingrun.zhang@ucalgary.ca> 
+
+If you used OmeSim, please cite our preprint 
+Long Z, Zhang Q. (2024+) “OmeSim: a phenotype simulator incorporating genetics, in-between-omes and nonlinear architectures” (Under review, Preprint: doi.org/10.1101/2024.03.10.584320) 
 
 8.	Copyright Licence (MIT Open Source)
 
