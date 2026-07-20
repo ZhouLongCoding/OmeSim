@@ -1,0 +1,98 @@
+library(pheatmap)
+library(tidyverse)
+library(ggplotify)
+library(heatmaply)
+library(ggraph)
+library(igraph)
+
+### template information ###
+# sample_size=146
+# num_gene=7235
+# num_trait=1000
+
+### expressions
+expressions <- read.csv("expressions.csv", header=TRUE, check.names=FALSE)
+colnames(expressions)[1] <- "Gene_ID"
+expressions <- aggregate( . ~ Gene_ID,data=expressions, max)
+rownames(expressions) <- expressions[,1]
+expressions <- expressions[,-1]
+
+if (ncol(expressions) <= 1000) {
+  width_ratio <- 10
+  height_ratio <- 8
+  margin <- 200
+  
+  png("expressions.png",
+      width  = width_ratio * ncol(expressions) + margin,
+      height = height_ratio * nrow(expressions) + margin)
+  
+  pheatmap(expressions,  
+           main = "Expression and clustering of all genes",
+           fontsize = 20,
+           fontsize_row = 10,
+           fontsize_col = 10)
+  dev.off()
+  
+} else {
+  width_ratio <- 5
+  height_ratio <- 5
+  margin <- 100
+  
+  png("expressions.png",
+      width  = width_ratio * ncol(expressions) + margin,
+      height = height_ratio * nrow(expressions) + margin)
+  
+  pheatmap(expressions,  
+           main = "Expression and clustering of all genes",
+           fontsize = 20,
+           fontsize_row = 5,
+           fontsize_col = 5)
+  dev.off()
+}
+
+### trait_by_exp
+width_ratio <- 5
+height_ratio <- 5
+margin <- 100
+
+traits <- read.csv("trait_by_exp.csv", header=TRUE, check.names=FALSE)
+colnames(traits)[1] <- "Gene_ID"
+traits <- aggregate( . ~ Gene_ID,data=traits, max)
+rownames(traits) <- traits[,1]
+traits <- traits[,-1]
+
+png("traits.png",width=width_ratio*length(traits)+margin,height=height_ratio*length(traits[,1])+margin)
+pheatmap(traits,  main="Traits and clustering of all subjects")
+dev.off()
+
+### cor_exp_by_exp
+corr_trait_by_trait<-read.csv("corr_exp_by_exp.csv", header=TRUE, check.names=FALSE)
+
+if(length(unique(corr_trait_by_trait[,1]))==dim(corr_trait_by_trait)[1]){
+  rownames(corr_trait_by_trait) <- corr_trait_by_trait[,1]
+  corr_trait_by_trait <- corr_trait_by_trait[,-1]
+}else{
+  duplicated_columns <- which(duplicated(corr_trait_by_trait[,1]))
+  corr_trait_by_trait <- corr_trait_by_trait[-duplicated_columns,-(duplicated_columns+1)]
+  rownames(corr_trait_by_trait) <- corr_trait_by_trait[,1]
+  corr_trait_by_trait <- corr_trait_by_trait[,-1]
+}
+
+png("corr_trait_by_trait.png",width=width_ratio*length(corr_trait_by_trait)+margin,height=height_ratio*length(corr_trait_by_trait[,1])+margin)
+pheatmap(corr_trait_by_trait, main="Correlations between all traits", cluster_rows = FALSE, cluster_cols = FALSE)
+dev.off()
+
+### network
+library(ggraph)
+library(igraph)
+
+network <- read.csv("network.csv", header=TRUE, check.names=FALSE)
+g <- graph_from_data_frame(network, directed = TRUE)
+
+#corr_data<-read.csv(args[1],header=TRUE,row.names=1, check.names=FALSE)
+png("network.png",width=2500,height=2500)
+plot(g, edge.arrow.size = 0.5, vertex.label.color = "blue", vertex.size = 8)
+title(main = "network between genes", col.main = "black", font.main = 20)
+dev.off()
+
+
