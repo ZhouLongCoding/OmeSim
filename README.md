@@ -1,8 +1,3 @@
----
-output:
-  pdf_document: default
-  html_document: default
----
 # OmeSim
 
 OmeSim is a Java-based simulator for generating molecular omics data together
