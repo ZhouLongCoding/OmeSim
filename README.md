@@ -1,196 +1,424 @@
-1.	Introduction 
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+# OmeSim
 
-OmeSim is a comprehensive simulator that simulates molecular omics data (i.e., whole-transcriptome data in its first release) and multiple (possibly correlated) phenotypic traits simultaneously. The immediate application of OmeSim is to support the assessment of novel statistical models and computational tools that aim to integrate multi-omics in the discovery of genetic basis of complex traits.  
+OmeSim is a Java-based simulator for generating molecular omics data together
+with multiple phenotypic traits. In its first release, OmeSim simulates
+whole-transcriptome expression data and whole-phenome trait data from
+user-provided genotype, gene annotation, pathway, and parameter files.
 
-Unlike most other simulators, OmeSim emphasizes the following features that are becoming the focus of many statistical and computational tools:
+OmeSim is designed for evaluating statistical models and computational tools
+that integrate omics data to study the genetic basis of complex traits. It can
+simulate additive and nonlinear genetic architectures, including epistasis,
+compensatory, heterogeneous, and compound models, and it outputs both simulated
+data and "gold-standard" correlation, association, and causality information.
 
-•	Simulates the whole-transcriptome and the whole-phenome together based on user-specified genotype file, gene file, pathway file, and many parameters. It supports nonlinear genetic models including epistasis, compensatory, heterogenous and the compound combination of them. This is in addition to the standard additive model and the infinitesimal model. 
-•	Supports various causality models (causality, pleiotropy, and reverse causality) at the level of individual terms (i.e., genetic variants, gene expressions, and traits), forming a trait-specific and pathway-specific causality graph (e.g., Figure 3 in Section Output Files)  
-•	Outputs expression-expression, expression-trait, and trait-trait correlations as well as genetics-expression and genetics-trait associations BEFORE adding noise (= random residual) and in infinitesimal (= contribution from the genetic background) terms. 
+Authors: Caifeng Li*, Zhou Long*, and Qingrun Zhang.
 
-The genuine correlation and associations, together with the causality graph, serve as “gold-standard” to assess statistical properties of tools discovering genetic basis in the presence of complicated linear and nonlinear relationship. 
+## Contents
 
-In addition to the function Simulate that simulates data, another function Causality provide functions to check causality relationship between any three terms under investigation based on the simulated causality graph.  
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Run OmeSim](#run-omesim)
+- [Input files](#input-files)
+- [Parameter file](#parameter-file)
+- [Output files](#output-files)
+- [Causality query](#causality-query)
+- [Contact](#contact)
+- [License](#license)
 
-2.	A quick start
+## Requirements
 
-After downloading the tar ball OmeSim.tar.gz, please just decompress the file by 
+### Java
 
-> tar -xvzf OmeSim.tar.gz 
+OmeSim is distributed as an executable JAR file. A working Java Runtime
+Environment or Java Development Kit is required.
 
-One will see the executable OmeSim.jar, a parameter file (parameter.txt), sample input files, and sample output files. Please modify the paths of the sample input files and the output file folder corresponding to the project folder in your local computer, and type the following commend:
+Check that Java is available:
 
-> java -Xmx4g -jar OmeSim.jar Simulate -input parameter.txt 
- 
-Then one will see the outcome files in the specified folder. By comparing them to the example outcome files, one can verify whether the program is running smoothly.  
+```bash
+java -version
+```
 
-3.	Design and implementation
+If Java is not found, install Java and make sure the `java` command is available
+in your shell `PATH`.
 
-OmeSim function Simulate adapts a bottom-up strategy to simulate omics (i.e., gene expression in the release 1.0) and phenotypic traits. Depicted in the flow-chart below, OmeSim first loads necessary (genotype, gene models, and pathway) data (Figure 1A), then generate a causality graph recording quantified contributing factors of each terms (gene expressions and traits) based on user-specified parameters (Figure 1B), and then iteratively calculates values of the gene expressions and traits (Figure 1C) contributed by genetics and other terms. After calculating the values, OmeSim will generate the gold-standard datasets (correlations between terms and associations between genetics and terms) (Figure 1D) and add infinitesimal and noise terms to finalize the ultimate values of gene expressions and traits (Figure 1E). The function Causality simply checks the causality relationship using the previously generated causality graph (Figure 1F). 
+### R and R packages
 
-![Figure1](https://github.com/ZhouLongCoding/OmeSim/assets/96537327/e9d0a5fc-1314-42d3-a879-acb7483ceaef)
+R is required for OmeSim visualization outputs. Check that `Rscript` is
+available:
 
- 
+```bash
+which Rscript
+```
 
-4.	Input files
+If the default `Rscript` path does not work, set the correct path in
+`parameter.txt` using `Rscript_Binary_Path`.
 
-For the Simulate function: There are four input files: genotype file, gene coordinates file, pathway file, and a parameter file specifying various values of parameters. 
+Install the required R packages:
 
-•	The genotype file should be provided using CSV, PLINK, or VCF formats, specifying genome-wide genetic variants, which are the genetic basis of all omics and traits. It is recommended to use CSV file that is the most simple and efficient format to store genotype information:
-o	Chr,Loc,Genotype_1,Genotype_2,Genotype_3,…, Genotype_n
-o	The genotype above has to be coded using 0 (homozygote reference allele), 1 (heterozygote) and 2 (homozygote alternative allele).
-•	The gene coordinates file specifies the gene names, the chromosome and start/end locations of all genes. The columns should be separated using commers:
-o	Gene_ID,Chr,Start,End
-•	The pathway file should specify the membership of all pathways. The pathway ID and the list of genes are separated by a tab (“\t”) and the genes are separated by commers:
-o	Pathway_ID“\t”Gene_1,Gene_2,…,Gene_n
-•	The parameter file will be explained in Section “Parameters and their explanations” 
+```r
+install.packages(c(
+  "pheatmap",
+  "tidyverse",
+  "ggplotify",
+  "heatmaply",
+  "igraph",
+  "ggraph"
+))
+```
 
-Examples of such files are in the download tar ball. 
+## Installation
 
-For the Causality function, the input are the lines of term triples subjected to the causality check. Each line is composed of three terms separated by commers.  
+Download `OmeSim.tar.gz`, then decompress it:
 
-5.	Output files
+```bash
+tar -xvzf OmeSim.tar.gz
+```
 
-There are three categories of output files for the function Simulate:
+The package contains:
 
-First, simulated expression and traits will be recorded as expression.csv and traits.csv in the output folder. In these two files, each column represents the values (of expressions or traits) for an individual; and each row represents the values of all individuals for an expression or a trait. Together with the input genotype data, hey are the main data for running other tools aiming to identify the genetic basis of complex traits by integrating expressions. 
+- `OmeSim.jar`: executable Java program
+- `parameter.txt`: template parameter file
+- `input_files`: example genotype, gene, and pathway data
+- `visualization_scripts`: R scripts used to generate figures
 
-Second, causality graph will be recorded in causality_graph.csv in the output folder. This file serves as the overall picture of the causality relationship. In this file, each row is composed of terms (genes or traits) separated by commers, with the first gene the term being contributed and the rest contributing. If there is only one term, it means that this term has no other contributor, i.e., only contributed by its own cis genetics. 
+## Run OmeSim
 
-Third, at the detailed level, three correlation files, i.e., corr_exp_by_exp.csv, corr_trait_by_trait.csv, and corr_trait_by_exp.csv recorded the gold standard correlations between these terms before adding noise and infinitesimal terms. Additionally, two association files, i.e., asso_trait_by_genotype.csv and asso_exp_by_genotype.csv recorded the gold-standard associations between terms and genotypes. 
+1. Decompress the package.
+2. Edit `parameter.txt` so that all file paths match your local environment.
+3. Run the simulation:
 
-Fourth, the heatmap of correlation files and association files, the visualization of the causality graph is also provided in the output folder. The examples are in Figure 2 and Figure 3.   
+```bash
+java -Xmx4g -jar OmeSim.jar Simulate -input parameter.txt
+```
 
-![Figure4](https://github.com/ZhouLongCoding/OmeSim/assets/96537327/4a0fe905-4bff-42a2-a465-532100ea3298)
-![Figure3](https://github.com/ZhouLongCoding/OmeSim/assets/96537327/c8bfe432-173d-4e9f-b48b-3a09472820bb)
+4. Check the folder specified by `Output_Folder`. In the examples below, this
+   folder is named `results`.
+5. If sample outputs are provided, compare the generated files with the sample
+   outputs to confirm that the installation and configuration are working.
 
+The `-Xmx4g` option gives Java up to 4 GB of memory. Increase this value if you
+simulate large datasets and have enough memory available, for example
+`-Xmx16g`.
 
-The output files for function Causality are the file of causality models answering the queries lines in the input file together with visualization files (if elected by the input parameters). 
+## Input files
 
-6.	Parameters 
+The `Simulate` function requires four main input files.
 
-Parameters for the function Simulate can be divided into three categories:
+### 1. Genotype file
 
-Parameters specifying input/intermediate/output files:
+The genotype file provides genome-wide genetic variants. Supported formats are:
 
-Genotype_File. Full (absolute) path to a file containing genotype information.
+- `CSV`
+- `PLINK`
+- `VCF`
 
-Genotype_File_Format. Format of the genotype file. Three formats are supported: “CSV”, “PLINK”, and “VCF”. 
+CSV is recommended for simple and efficient genotype storage. Genotypes should
+be coded as:
 
-Output_Folder. Full (absolute) path to the folder for output files.  
+- `0`: homozygous reference allele
+- `1`: heterozygous allele
+- `2`: homozygous alternative allele
 
-Arch_Detailed_File. The intermediate file recording the contributors of each term and their weights. This file will be generated by OmeSim during the computation. Each line specifies the contributors to a term, containing 10 columns:   
-•	ID of the term being contributed (a gene or trait).
-•	Number of cis regulatory variants.
-•	Number of trans regulatory variants. 
-•	IDs of genes that the trans regulatory variants located. 
-•	ID of genes whose expressions are relevant. 
-•	ID of traits contributing to the term.
-•	Weights of the above four categories (cis, trans, expression, and traits).
-•	Genetic model (one out of the five supported models, i.e., additive, epistasis, heterogenous, compensatory, and compound).
-•	The proportion of infinitesimal term (a value between 0 and 1, specifying the proportion of infinitesimal term relative to the total variance components including biological terms (the four categories above and infinitesimal).
-•	Noise variance component (a value between 0 and 1, specifying the proportion of noise term relative to the total variance components including all terms).
+Example CSV:
 
-Num_Traits [Default = 1,000]. Number of traits to be simulated. 
+```csv
+#Chr,Loc,Subject_1,Subject_2,Subject_3,Subject_4
+1,34506,0,1,0,2
+```
 
-Population genetic parameters:
-								
-Max_MAF [Default = 0.5]. Maximal minor allele frequency for the filtering when loading genotype file. 
+### 2. Gene file
 
-Min_MAF [Default = 0.05]. Minimal minor allele frequency for the filtering when loading genotype file.  
+The gene file defines genomic coordinates for genes. Columns are separated by
+commas.
 
-Loc_Distance [Default = 0]. The minimal distance (in the unit of base-pair) between adjacent genetic variants. This is used to remove variants in strong LD with others. Since the specification of LD directly is problematic and confounded by the allele frequency, as a pragmatic solution, OmeSim uses distance to ensure sufficient independence between variants. 
+Example:
 
-Genetic model and calculation parameters:
+```csv
+#Gene_ID,Chr,Start,End
+ENSG00000000457.14,1,169849631,169894267
+```
 
-Iteration_Rounds [Default = 10]. Number of iterations when calculating the values of terms. Here the iterations are needed because of that the value of a term may rely on other terms whose values are not initialized at the beginning. Therefore, iteratively more and more terms will be initialized and can contribute to other terms meaningfully. The terms that only rely on genetics (and possibly infinitesimal and noise) will be finalized in the first round. The terms relying on them will be finalized in the second term. Note that, if there is a circle in the causality graph, the terms in this circle will never be finalized, however their values may be stabilized (i.e., converge to a largely unchanged value) after sufficient rounds. 
+### 3. Pathway file
 
-Gene_Contributors [Default = 1.0, 0.5, 0.3, 0.1]. There are probabilities based on which OmeSim will randomly decide whether each gene expression contains contributions from each of the four categories of terms: [0] = cis-genetics; [1] = trans-genetics; [2] = other gene expressions; [3] = traits. It is suggested to specify the probability of cis-genetics to 1.0, mandating the presence of cis genetic contributions to the expression of the gene itself. 
+The pathway file defines pathway membership. Each line should include a pathway
+ID, followed by a tab, followed by a comma-separated list of genes in that
+pathway.
 
-Traits_Contributors [Default = 1.0, 0.8, 0.5, 0.3]. There are probabilities based on which OmeSim will randomly decide whether each trait contains contributions from each of the four categories of terms: [0] = genetics (across the whole genome); [1] = gene expressions; [2] = traits; [3] = infinitesimal. It is suggested to specify the probability of genetics to 1.0, mandating the presence of genetic contributions to the trait. 
+Example:
 
-Gene_Contri_Weights [Default = 1.0, 0.5, 4.0, 2.0]. There are the average weights to be multiplied to the values of four contributing terms (if they are present, decided by the probabilities specified in Gene_Contributors) contributing to gene expressions. The same order as in Gene_Contributors: [0] = cis-genetics; [1] = trans-genetics; [2] = other gene expressions; [3] = traits. Note that the weight will be automatically assigned to NaN if its term is not present. 
+```text
+Pathway_1<TAB>Gene_1,Gene_2,...,Gene_n
+```
+
+### 4. Parameter file
+
+The parameter file controls input paths, output paths, genetic architecture,
+simulation size, visualization, and model settings. A template `parameter.txt`
+is included in the OmeSim package.
+
+## Parameter file
+
+At minimum, update the required paths in `parameter.txt`:
+
+```ini
+Genotype_File=/path/to/genotype_file.csv
+Genotype_File_Format=CSV
+Genes_File=/path/to/gene_file.csv
+Pathway_File=/path/to/pathway_file.txt
+Output_Folder=/path/to/results
+Arch_Detailed_File=/path/to/causal/causal_terms.txt
+Rscript_Binary_Path=/path/to/bin/Rscript
+Visualization_Code_Folder=/path/to/visualization_scripts
+```
+
+Optional parameters can be added to the same file. If a parameter is not listed,
+OmeSim uses its default value.
+
+Example:
+
+```ini
+Num_Traits=1000
+Min_MAF=0.05
+Max_MAF=0.5
+Loc_Distance=0
+Iteration_Rounds=10
+Gene_Contributors=1.0,0.5,0.3,0.1
+Traits_Contributors=1.0,0.8,0.5,0.3
+Gene_Contri_Weights=1.0,0.5,4.0,2.0
+Traits_Contri_Weights=1.0,4.0,2.0
+```
+
+### Modify parameters
+
+To change simulation settings, edit `parameter.txt`, save the file, and rerun
+OmeSim.
+
+For example, to simulate fewer traits:
+
+```ini
+Num_Traits=100
+```
+
+To change MAF filters:
+
+```ini
+Min_MAF=0.01
+Max_MAF=0.5
+```
+
+To point OmeSim to a different R installation:
+
+```ini
+Rscript_Binary_Path=/usr/local/bin/Rscript
+```
+
+After editing the parameter file, rerun:
+
+```bash
+java -Xmx4g -jar OmeSim.jar Simulate -input parameter.txt
+```
+
+### Common parameters
+
+| Parameter | Description | Default |
+| --- | --- | --- |
+| `Genotype_File` | Absolute path to the genotype file | Required |
+| `Genotype_File_Format` | Genotype format: `CSV`, `PLINK`, or `VCF` | Required |
+| `Genes_File` | Absolute path to the gene coordinate file | Required |
+| `Pathway_File` | Absolute path to the pathway file | Required |
+| `Output_Folder` | Absolute path to the main output directory, such as `/path/to/results` | Required |
+| `Arch_Detailed_File` | Absolute path to `causal_terms.txt`, such as `/path/to/causal/causal_terms.txt`; `causal_terms.txt.tmp` is written to the same `causal` folder | Required |
+| `Num_Traits` | Number of traits to simulate | `1000` |
+| `Min_MAF` | Minimum minor allele frequency filter | `0.05` |
+| `Max_MAF` | Maximum minor allele frequency filter | `0.5` |
+| `Loc_Distance` | Minimum distance between adjacent variants | `0` |
+| `Iteration_Rounds` | Number of iterative calculation rounds | `10` |
+| `Gene_Contributors` | Probabilities for cis, trans, expression, and trait contributors to genes | `1.0,0.5,0.3,0.1` |
+| `Traits_Contributors` | Probabilities for genetic, expression, trait, and infinitesimal contributors to traits | `1.0,0.8,0.5,0.3` |
+| `Gene_Contri_Weights` | Average weights for contributors to gene expressions | `1.0,0.5,4.0,2.0` |
+| `Traits_Contri_Weights` | Average weights for contributors to traits | `1.0,4.0,2.0` |
+| `Weights_Relative_Range` | Relative fluctuation range around average contributor weights | `0.5` |
+| `Traits_Var_Comp_Inf_Min` | Minimum variance component for the trait infinitesimal term | `0.05` |
+| `Traits_Var_Comp_Inf_Max` | Maximum variance component for the trait infinitesimal term | `0.15` |
+| `Var_Comp_Noise_Min` | Minimum variance component for the noise term | `0.05` |
+| `Var_Comp_Noise_Max` | Maximum variance component for the noise term | `0.15` |
+| `Cis_Var_Flanking` | Flanking region for cis-variants, in base pairs | `500000` |
+| `Min_Var_Gene` | Minimum number of variants required for a gene | `10` |
+| `Cis_Variant_Numbers_Mean` | Average number of cis-genetic variants contributing to a gene expression | `5` |
+| `Cis_Variant_Numbers_Range` | Range around the mean number of cis-genetic variants contributing to a gene expression | `10` |
+| `Trans_Variant_Numbers_Mean` | Average number of trans-genetic variants contributing to a gene expression; also controls trait genetic components | `5` |
+| `Trans_Variant_Numbers_Range` | Range around the mean number of trans-genetic variants contributing to a gene expression; also controls trait genetic components | `10` |
+| `Num_Contributing_Genes_Mean` | Average number of genes contributing to a gene expression or trait | `4` |
+| `Num_Contributing_Genes_Range` | Range around the mean number of genes contributing to a gene expression or trait | `4` |
+| `Num_Contributing_Traits_Mean` | Average number of traits contributing to a gene expression or trait | `2` |
+| `Num_Contributing_Traits_Range` | Range around the mean number of traits contributing to a gene expression or trait | `1` |
+| `Num_Infinitesimal` | Number of genome-wide variants selected to form the infinitesimal genetic background term | `5000` |
+| `Gene_Models` | Probabilities for additive, epistatic, compensatory, heterogeneous, and compound gene models | `0.5,0.2,0.2,0.05,0.05` |
+| `Trait_Models` | Probabilities for additive, epistatic, compensatory, heterogeneous, and compound trait models | `0.5,0.05,0.05,0.1,0.3` |
+| `Trait_Binary_Proportion` | Proportion of binary traits | `0.5` |
+| `Binary_Mode_Proportion` | Proportions of binary traits simulated by liability and logistic models | `0.5,0.5` |
+| `Rscript_Binary_Path` | Absolute path to `Rscript` | `/usr/local/bin/Rscript` |
+| `Visualization_Code_Folder` | Absolute path to the R visualization scripts | Required |
+| `Large_Figures_Needed` | Whether to generate large full-dataset figures | `false` |
+| `Trait_Causality_Degree` | Maximum degree for trait-specific sub-causality graphs | `4` |
+| `Edge_Num_Ratio` | Size-control parameter for sub-causality graphs | `300` |
 
-Traits_Contri_Weights [Default = 1.0, 4.0, 2.0]. There are the average weights to be multiplied to the values of four contributing terms (if they are present, decided by the probabilities specified in Traits_Contributors) contributing to traits. The same order as in Traits_Contributors: : [0] = genetics (across the whole genome); [1] = gene expressions; [2] = traits. Note that the weight will be automatically assigned to NaN if its term is not present. Also note that the weight of infinitesimal term is not set here by weight; instead, the variance component parameter will specify the infinitesimal terms after calculating biological terms. 
+## Output files
 
-Weights_Relative_Range [Default = 0.5]. The relative range of the fluctuation of weights surrounding the averages specified by Traits_Contri_Weights and Gene_Contri_Weights. OmeSim will generate random weights based on the averages and the range that is allowed by this parameter. 
+OmeSim generates top-level result files in the `results` folder, a `figures` folder inside `results`, and a causal-term file in the `causal` folder.
+
+Example output files are available [here](https://drive.google.com/drive/folders/1FXNOPCOzBTssAMDAuaLMLmBWHSY4l6gl). Users can compare their own generated files with these reference outputs to verify that OmeSim has been installed and executed correctly.
 
-Traits_Var_Comp_Inf_Min [Default = 0.05] Minimal variance component for the infinitesimal term (when it indeed is present). Note that this is only for traits, and gene expressions do not contain an infinitesimal term. 
+### Top-level result files
 
-Traits_Var_Comp_Inf_Max [Default = 0.45] Maximal variance component for the infinitesimal term (when it indeed is present). Note that this is only for traits, and gene expressions do not contain an infinitesimal term.
+The main output files are:
 
-Var_Comp_Noise_Min [Default = 0.1] Minimal variance component for the noise term (which is always present). Note that the non-noise part may not be deemed as "heritability" as the other traits and expressions (and noises in the traits and expressions) are also involved.  
+- `asso_exp_by_genotype.csv`
+- `asso_trait_by_genotype.csv`
+- `causality_graph_one_many.csv`
+- `causality_graph_one_one.csv`
+- `corr_exp_by_exp.csv`
+- `corr_trait_by_trait.csv`
+- `corr_trait_by_exp.csv`
+- `expressions.csv`
+- `traits.csv`
 
-Var_Comp_Noise_Max [Default = 0.9] Maximal variance component for the noise term (which is always present). Note that the non-noise part may not be deemed as "heritability" as the other traits and expressions (and noises in the traits and expressions) are also involved.  
+In `expressions.csv` and `traits.csv`, each column represents an individual and
+each row represents a gene expression or trait.
 
-Cis_Var_Flanking [Default = 500,00] Flanking regions (upstream or downstream) in the unit of base-pair, defining the genomic regions within which the genetic variants are considered as “cis-variants”. 
+The correlation and association files record gold-standard relationships before
+adding random noise and infinitesimal genetic background terms.
 
-Min_Var_Gene [Default = 10] The threshold of removing a gene that is too small. Here if there are fewer genetic variants in the gene (including the flanking regions specified by Cis_Var_Flanking) than the specified value, OmeSim will remove this gene from the gene model. 
+The causality graph files record relationships among genes and traits. Use
+`causality_graph_one_many.csv` with the `Causality` function.
 
-Cis_Variant_Numbers_Mean [Default = 5] The average number of cis-genetic variants contributing to a gene expression. 
+### Figures folder
 
-Cis_Variant_Numbers_Range [Default = 10] The range (up or down) of the number of cis-genetic variants contributing to a gene expression. Note that OmeSim will generate the number of cis-genetic variants based on the mean and the range surrounding the mean. The minimal number of cis-genetic variant will be at least 1 (if the cis-genetic variants’ contribution is indeed present, randomly decided by Gene_Contributors.)
+When R and the required R packages are correctly configured, OmeSim also creates
+a `figures` folder inside the `results` folder.
 
-Trans_Variant_Numbers_Mean [Default = 5] The average number of trans-genetic variants contributing to a gene expression. The same parameter also controls the genetic components for traits.
+The `figures` folder contains one folder for each simulated trait and one folder
+for each pathway. For the default setting of `Num_Traits=1000`, this means 1000
+trait folders plus all pathway folders.
 
-Trans_Variant_Numbers_Range [Default = 10] The range (up or down) of the number of trans-genetic variants contributing to a gene expression. Note that OmeSim will generate the number of trans-genetic variants based on the mean and the range surrounding the mean. The minimal number of trans-genetic variant will be at least 1 (if the trans-genetic variants’ contribution is indeed present, randomly decided by Gene_Contributors.) The same parameter also controls the genetic components for traits.
+Each trait folder contains data and figures for the trait-specific causality
+graph from degree 1 to degree 4.
 
-Num_Contributing_Genes_Mean [Default = 4] The average number genes contributing to a term (either gene expression or trait). 
-		
-Num_Contributing_Genes_Range [Default = 4] The range (up or down) of the number of genes contributing to a term (either gene expression or trait). Note that OmeSim will generate the number of genes based on the mean and the range surrounding the mean. The minimal number of gene will be at least 1 (if the gene expressions’ contribution is indeed present, randomly decided by Gene_Contributors or Traits_Contributors).
+Each pathway folder contains pathway-specific data and figures. For example,
+the `Pathway_1` folder may contain:
 
-Num_Contributing_Traits_Mean [Default = 2] The average number traits contributing to a term (either gene expression or trait). 
+- `Pathway_1.corr_exp_by_exp.csv`
+- `Pathway_1.corr_exp_by_exp.png`
+- `Pathway_1.expressions.csv`
+- `Pathway_1.expressions.png`
+- `Pathway_1.network.csv`
+- `Pathway_1.network.png`
+- `Pathway_1.trait_by_exp.csv`
+- `Pathway_1.trait_by_exp.png`
 
-Num_Contributing_Traits_Range [Default = 1] The range (up or down) of the number of traits contributing to a term (either gene expression or trait). Note that OmeSim will generate the number of traits based on the mean and the range surrounding the mean. The minimal number of traits will be at least 1 (if the traits’ contribution is indeed present, randomly decided by Gene_Contributors or Traits_Contributors).
+### Causal folder
 
-Num_Infinitesimal [Default = 5,000] To approximately calculate the contribution of infinitesimal term (representing the genetic background), OmeSim randomly selects a large number of genetic variants from the whole genome and add their (mostly equal and tiny) contributions. This parameter specifies how many genetic variants will be selected to form the infinitesimal term. The total value will be re-scaled based on the specified contribution of infinitesimal term.
-				
-Gene_Models [Default = 0.5,0.2,0.2,0.05,0.05] OmeSim supports five models to specify the relationship between genetic and other terms in calculating the values. They are {additive, epistatic, compensatory, heterogenous, and compound. Please refer to our paper for the detailed formula on how their mathematical definitions. Here, this parameter is a 5-element array to specify the probabilistic distribution of the five models among all gene expressions.  [0]=additive;[1]=epistatic;[2]=compensatory;[3]=heterogenous; [4]=compound. 
-				
-Trait_Models [Default = 0.5,0.05,0.05,0.1,0.3] The probability distribution of the above mentioned five models for traits. 
-	
-Trait_Binary_Proportion [Default = 0.5] The proportion of case/control binary traits (in contrast to quantitative traits to be simulated by OmeSim. The rest (1 - Trait_Binary_Proportion) traits will be simulated as quantitative.
+In addition to the files in `results`, OmeSim writes the following file to the
+`causal` folder. This folder is defined by the path provided to
+`Arch_Detailed_File`.
 
-Binary_Mode_Proportion [Default = 0.5,0.5] Among the binary traits (proportion specified by Trait_Binary_Proportion), the proportion of traits simulated by two alternative statistical models, i.e., liability model and logistic model. The model liability assumes that the underlying quantitative value contributed by all terms (including biological and noise) decides the case/control status by a cutoff, above which will be diseased (i.e., case). OmeSim will identify the median of the quantitative value as the cutoff. So, half of the sample will be labeled as cases (1.0) and the other half will be controls (0.0). The logistic model will use the standard logistic regression model, i.e., log(p/(1-p)) = quantitative-value, to solve p, the odd (i.e., a probability) based on the quantitative values. This p is the probability of having the disease. OmeSim will then label the samples with odd (probability) higher than 0.5 as cases (and the rest are controls). 
+- `causal_terms.txt`
 
-Graphics genetic parameters:
+## Causality query
 
-Rscript_Binary_Path [Default = “/usr/local/bin/Rscript”]. Absolute path to binary executable 'Rscript' in the executing environment. If the default doesn’t work and the users is not clear on where to find the executable, please type “> which Rscript” to find out. Note that R has to be installed in the environment.   
-	
-Visualization_Code_Folder.  Full (absolute) path to the folder for R scripts to draw figures. The three R scripts drawing the figures are all enclosed in the OmeSim download. Note that the following libraries have to be installed before running the code (using command install.packages(‘package_name’) in R:
-•	pheatmap
-•	tidyverse
-•	ggplotify
-•	heatmaply
-•	igraph
-•	ggraph
-	
-Large_Figures_Needed [Default = false]. Whether large figures for all data are needed. Generating full pictures of all data expressions and traits (correlations, causality and the original data) may be memory consuming and the outcome could be very large and difficult to view. We assume that the most useful part of the graphics function is the pathway-specific and trait-specific figures. Nevertheless, we offer this function, although the default is ‘false’. 
-	
-Trait_Causality_Degree [Default = 4]. Parameter to specify how many degrees between a source term (i.e., a node in the causality graph) and the target trait. The “degree” is defined as the number of edges that the source node has to go through to reach the target trait node. Sub-causality graphs for all degree < Trait_Causality_Degree will be generated. 
-	
-Edge_Num_Ratio [Default = 300]. Parameter controlling the size of the sub-causality graphs. The actual size of the sub-causality graph is calculated by: Edge_Num_Ratio *Math.pow(num_of_edge_in_the_graph, 0.4).	
+The `Causality` function checks causal relationships among queried term triples
+after a simulation has been completed.
 
-Parameters for the function Causality. 
+It can identify three relationship types:
 
-Query_File. Full (absolute) path to a file containing lines of queries. The queries are three terms (gene names or trait names) for OmeSim to check their causal relationship via the Causality Graph. The three names should be separated using commers. Three causality relationship will be checked: “Causality”, “Pleiotropy”, and “Reverse Causality”.
+- `Causality`: `variants_gene_ID => exp_gene_ID => trait_ID`
+- `Pleiotropy`: `variants_gene_ID => exp_gene_ID` and
+  `variants_gene_ID => trait_ID`
+- `Reverse Causality`: `variants_gene_ID => trait_ID => exp_gene_ID`
 
-Figures_Needed. If elected, PNG files visualizing the causality relationship between the three terms will be generated.   
+Prepare a query file in which each line contains three comma-separated terms:
 
-Output_Folder Full (absolute) path to the folder for output files.  
+```csv
+#variants_gene_ID,exp_gene_ID,trait_ID
+ENSG00000278677.2,ENSG00000149480.7,Quantitative_Trait_0819
+ENSG00000278677.2,ENSG00000149480.7,Quantitative_Trait_0000
+ENSG00000169418.10,ENSG00000054282.16,Quantitative_Trait_0079
+```
 
+Run:
 
-7.	Contact:
+```bash
+java -Xmx4g -jar OmeSim.jar Causality \
+  -causal_graph_file /path/to/results/causality_graph_one_many.csv \
+  -triple_IDs /path/to/query_terms.txt
+```
 
-Zhou Long < zhoulongnyc@gmail.com>  
-Qingrun Zhang < qingrun.zhang@ucalgary.ca> 
+The output is written automatically to:
 
-If you used OmeSim, please cite our preprint 
-Long Z, Zhang Q. (2024+) “OmeSim: a phenotype simulator incorporating genetics, in-between-omes and nonlinear architectures” (Under review, Preprint: doi.org/10.1101/2024.03.10.584320) 
+```text
+/path/to/query_terms.txt.checked.txt
+```
 
-8.	Copyright Licence (MIT Open Source)
+Example output:
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+```text
+causality: ENSG00000278677.2 => ENSG00000149480.7 => Quantitative_Trait_0819
+pleiotropy: ENSG00000278677.2 => ENSG00000149480.7; ENSG00000278677.2 => Quantitative_Trait_0000
+reverse_causality: ENSG00000169418.10 => Quantitative_Trait_0079 => ENSG00000054282.16
+```
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+## Troubleshooting
 
+### `java: command not found`
+
+Install Java and confirm that `java -version` works in your terminal.
+
+### R figures are not generated
+
+Check that:
+
+- R is installed.
+- `Rscript_Binary_Path` points to the correct `Rscript` executable.
+- `Visualization_Code_Folder` points to the folder containing the OmeSim R
+  visualization scripts.
+- Required R packages are installed.
+
+### Out-of-memory errors
+
+Increase the Java memory limit if your machine has enough available memory:
+
+```bash
+java -Xmx16g -jar OmeSim.jar Simulate -input parameter.txt
+```
+
+## Contact
+
+Qingrun Zhang: <qingrun.zhang@ucalgary.ca>
+
+## License
+
+Copyright (c) 2026 Caifeng Li*, Zhou Long*, and Qingrun Zhang
+
+OmeSim is released under the MIT Open Source License.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
+Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
